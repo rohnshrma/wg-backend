@@ -7,6 +7,7 @@ import {
   updateMyProfile,
   approveStudent,
   rejectStudent,
+  deleteStudent,
   getMyDashboard,
 } from '../controllers/student.controller';
 
@@ -22,5 +23,6 @@ router.get('/:id', protect, authorize('admin', 'student'), getStudentById);
 router.put('/:id', protect, updateStudent);
 router.patch('/:id/approve', protect, authorize('admin'), approveStudent);
 router.patch('/:id/reject', protect, authorize('admin'), rejectStudent);
+router.delete('/:id', protect, authorize('admin'), deleteStudent);
 
 export default router;

@@ -2,28 +2,37 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { protect } from '../middleware/auth.middleware';
 import cloudinary from '../config/cloudinary';
+import env from '../config/env';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
-import { BadRequestError } from '../utils/apiError';
+import { BadRequestError, ApiError } from '../utils/apiError';
 
 const router = Router();
 
-// Multer memory storage
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Allowed: JPEG, PNG, WebP, GIF, PDF'));
+      cb(new BadRequestError('Invalid file type. Allowed: JPEG, PNG, WebP, GIF, PDF'));
     }
   },
 });
 
+const assertCloudinaryConfigured = (): void => {
+  if (!env.CLOUDINARY_CLOUD_NAME || !env.CLOUDINARY_API_KEY || !env.CLOUDINARY_API_SECRET) {
+    throw new ApiError(503, 'File uploads are not configured yet. Please contact support.');
+  }
+};
+
 // Upload single image
 router.post('/image', protect, upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
+  assertCloudinaryConfigured();
   if (!req.file) throw new BadRequestError('No file uploaded');
 
   const folder = (req.query.folder as string) || 'webigeeks/general';
@@ -60,6 +69,7 @@ router.post('/image', protect, upload.single('file'), asyncHandler(async (req: R
 
 // Upload document (PDF)
 router.post('/document', protect, upload.single('file'), asyncHandler(async (req: Request, res: Response) => {
+  assertCloudinaryConfigured();
   if (!req.file) throw new BadRequestError('No file uploaded');
 
   const folder = (req.query.folder as string) || 'webigeeks/documents';

@@ -7,6 +7,7 @@ export interface IPayment extends Document {
   paymentMode: 'full' | 'emi';
   paymentMethod: 'cash' | 'upi' | 'bank_transfer' | 'card' | 'other';
   transactionId?: string;
+  receiptNumber: string;
   receiptUrl?: string;
   notes?: string;
   recordedBy: mongoose.Types.ObjectId;
@@ -43,6 +44,11 @@ const paymentSchema = new Schema<IPayment>(
       required: [true, 'Payment method is required'],
     },
     transactionId: String,
+    receiptNumber: {
+      type: String,
+      required: true,
+      unique: true,
+    },
     receiptUrl: String,
     notes: String,
     recordedBy: {

@@ -3,7 +3,9 @@ import {
   sendWhatsAppText,
   sendWelcomeWhatsApp,
   sendAdmissionApprovedWhatsApp,
+  sendAdmissionRejectedWhatsApp,
   sendPaymentWhatsApp,
+  sendPaymentReceiptWhatsApp,
   sendInstallmentReminderWhatsApp,
   sendLeadFollowUpWhatsApp,
   sendNewLeadWhatsAppToAdmin,
@@ -11,7 +13,9 @@ import {
 import {
   sendWelcomeEmail,
   sendAdmissionApprovedEmail,
+  sendAdmissionRejectedEmail,
   sendPaymentConfirmationEmail,
+  sendPaymentReceiptEmail,
   sendPasswordResetEmail,
   sendNewLeadNotification,
   sendInstallmentReminderEmail,
@@ -23,12 +27,12 @@ import {
  * Each method is fire-and-forget; failures are logged but don't block.
  */
 export const NotificationService = {
-  // Registration / Welcome
-  async welcome(email: string, phone: string, name: string) {
-    await Promise.allSettled([
-      sendWelcomeEmail(email, name),
-      sendWelcomeWhatsApp(phone, name),
-    ]);
+  // Registration / Welcome. Phone is optional — at account-creation time
+  // (before profile completion) there's no phone number on file yet.
+  async welcome(email: string, name: string, phone?: string) {
+    const tasks = [sendWelcomeEmail(email, name)];
+    if (phone) tasks.push(sendWelcomeWhatsApp(phone, name));
+    await Promise.allSettled(tasks);
   },
 
   // Admission approved
@@ -58,6 +62,33 @@ export const NotificationService = {
     await Promise.allSettled([
       sendPaymentConfirmationEmail(email, name, amount, receiptNumber, courseName, pendingAmount),
       sendPaymentWhatsApp(phone, name, amount, receiptNumber),
+    ]);
+  },
+
+  // Explicit "send receipt" action (admin-triggered, on demand). Unlike the
+  // other methods here this isn't fire-and-forget: the admin is waiting on
+  // the result, so it returns whether the send actually succeeded.
+  async sendReceipt(
+    channel: 'email' | 'whatsapp',
+    email: string,
+    phone: string,
+    name: string,
+    receiptNumber: string,
+    receiptUrl: string,
+    courseName: string,
+    amount: number
+  ): Promise<boolean> {
+    if (channel === 'email') {
+      return sendPaymentReceiptEmail(email, name, receiptNumber, receiptUrl, courseName, amount);
+    }
+    return sendPaymentReceiptWhatsApp(phone, name, receiptNumber, receiptUrl, amount);
+  },
+
+  // Admission rejected
+  async admissionRejected(email: string, phone: string, name: string, reason: string) {
+    await Promise.allSettled([
+      sendAdmissionRejectedEmail(email, name, reason),
+      sendAdmissionRejectedWhatsApp(phone, name, reason),
     ]);
   },
 

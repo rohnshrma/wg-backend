@@ -2,6 +2,7 @@ import app from './app';
 import env from './config/env';
 import connectDB from './config/database';
 import ensureDefaultAdmin from './utils/ensureDefaultAdmin';
+import { registerJobs } from './jobs';
 
 const startServer = async (): Promise<void> => {
   try {
@@ -9,6 +10,7 @@ const startServer = async (): Promise<void> => {
     try {
       await connectDB();
       await ensureDefaultAdmin();
+      registerJobs();
     } catch (dbError: any) {
       console.warn(`\n⚠️  MongoDB not connected: ${dbError.message}`);
       console.warn('   Server will start without DB. API routes needing DB will fail.\n');

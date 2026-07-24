@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import Lead from '../models/Lead';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
+import { NotificationService } from '../services/notificationService';
 import { BadRequestError, NotFoundError } from '../utils/apiError';
 
 /**
@@ -26,10 +27,11 @@ export const submitInquiry = asyncHandler(
       source: source || 'hero_form',
     });
 
-    // TODO: Trigger notifications (Agent 4)
-    // - Send admin email
-    // - Send admin WhatsApp
-    // - Send student confirmation email
+    try {
+      await NotificationService.newLead(name, phone, email, courseInterested, lead.source);
+    } catch (error) {
+      console.error('Failed to send new-lead notification:', error);
+    }
 
     sendResponse(res, {
       statusCode: 201,

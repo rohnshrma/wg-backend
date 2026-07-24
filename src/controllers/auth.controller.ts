@@ -1,14 +1,31 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import User from '../models/User';
+import env from '../config/env';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
+import { NotificationService } from '../services/notificationService';
 import {
   BadRequestError,
   UnauthorizedError,
+  ForbiddenError,
   NotFoundError,
   ConflictError,
 } from '../utils/apiError';
+
+const AUTH_COOKIE_NAME = 'token';
+
+const authCookieOptions = () => ({
+  httpOnly: true,
+  secure: env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
+  path: '/',
+});
+
+const setAuthCookie = (res: Response, token: string): void => {
+  res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
+};
 
 /**
  * @desc    Register a new user
@@ -36,10 +53,17 @@ export const register = asyncHandler(
 
     // Generate token
     const token = user.generateAuthToken();
+    setAuthCookie(res, token);
 
     // Update last login
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
+
+    try {
+      await NotificationService.welcome(user.email, user.email.split('@')[0]);
+    } catch (error) {
+      console.error('Failed to send welcome email:', error);
+    }
 
     sendResponse(res, {
       statusCode: 201,
@@ -65,10 +89,6 @@ export const login = asyncHandler(
   async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      throw new BadRequestError('Please provide email and password');
-    }
-
     // Find user with password field
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
@@ -87,6 +107,7 @@ export const login = asyncHandler(
 
     // Generate token
     const token = user.generateAuthToken();
+    setAuthCookie(res, token);
 
     // Update last login
     user.lastLogin = new Date();
@@ -103,6 +124,18 @@ export const login = asyncHandler(
         token,
       },
     });
+  }
+);
+
+/**
+ * @desc    Log out current user
+ * @route   POST /api/auth/logout
+ * @access  Private
+ */
+export const logout = asyncHandler(
+  async (_req: Request, res: Response, _next: NextFunction): Promise<void> => {
+    res.clearCookie(AUTH_COOKIE_NAME, { ...authCookieOptions(), maxAge: undefined });
+    sendResponse(res, { message: 'Logged out successfully' });
   }
 );
 
@@ -142,15 +175,16 @@ export const forgotPassword = asyncHandler(
     const resetToken = user.generatePasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-    // TODO: Send email with reset link (Agent 4 — Communication)
-    // const resetUrl = `${env.FRONTEND_URL}/reset-password/${resetToken}`;
+    const resetUrl = `${env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    try {
+      await NotificationService.passwordReset(user.email, resetUrl);
+    } catch (error) {
+      console.error('Failed to send password reset email:', error);
+    }
 
     sendResponse(res, {
       message: 'If an account with that email exists, a reset link has been sent',
-      data: {
-        // Remove in production — for development only
-        resetToken,
-      },
     });
   }
 );
@@ -188,6 +222,7 @@ export const resetPassword = asyncHandler(
 
     // Generate new auth token
     const authToken = user.generateAuthToken();
+    setAuthCookie(res, authToken);
 
     sendResponse(res, {
       message: 'Password reset successful',
@@ -200,6 +235,34 @@ export const resetPassword = asyncHandler(
         token: authToken,
       },
     });
+  }
+);
+
+/**
+ * @desc    Verify the current user's password — used as a confirmation
+ *          gate in front of destructive admin actions (delete student,
+ *          delete course, etc.) without issuing a new session.
+ * @route   POST /api/auth/verify-password
+ * @access  Private
+ */
+export const verifyPassword = asyncHandler(
+  async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+    const { password } = req.body;
+
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      // 403, not 401: the session itself is valid — the frontend's
+      // axios interceptor treats any 401 as "session expired" and
+      // force-redirects to /login, which would be wrong here.
+      throw new ForbiddenError('Incorrect password');
+    }
+
+    sendResponse(res, { message: 'Password verified' });
   }
 );
 
@@ -227,6 +290,7 @@ export const changePassword = asyncHandler(
     await user.save();
 
     const token = user.generateAuthToken();
+    setAuthCookie(res, token);
 
     sendResponse(res, {
       message: 'Password changed successfully',

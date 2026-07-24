@@ -4,8 +4,11 @@ import User from '../models/User';
 import Counter from '../models/Counter';
 import Notification from '../models/Notification';
 import Course from '../models/Course';
+import Payment from '../models/Payment';
+import Installment from '../models/Installment';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
+import { NotificationService } from '../services/notificationService';
 import {
   BadRequestError,
   NotFoundError,
@@ -213,7 +216,7 @@ export const updateStudent = asyncHandler(
  */
 export const approveStudent = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findById(req.params.id).populate('courseId', 'title');
 
     if (!student) {
       throw new NotFoundError('Student not found');
@@ -243,7 +246,18 @@ export const approveStudent = asyncHandler(
       link: '/dashboard',
     });
 
-    // TODO: Send approval email + WhatsApp (Agent 4)
+    try {
+      const courseName = (student.courseId as any)?.title || 'your course';
+      await NotificationService.admissionApproved(
+        student.email,
+        student.studentContactNumber,
+        student.fullName,
+        admissionId,
+        courseName
+      );
+    } catch (error) {
+      console.error('Failed to send admission-approved notification:', error);
+    }
 
     sendResponse(res, {
       message: 'Student approved successfully',
@@ -287,12 +301,47 @@ export const rejectStudent = asyncHandler(
       link: '/dashboard/profile',
     });
 
-    // TODO: Send rejection email (Agent 4)
+    try {
+      await NotificationService.admissionRejected(
+        student.email,
+        student.studentContactNumber,
+        student.fullName,
+        reason
+      );
+    } catch (error) {
+      console.error('Failed to send admission-rejected notification:', error);
+    }
 
     sendResponse(res, {
       message: 'Student rejected',
       data: student,
     });
+  }
+);
+
+/**
+ * @desc    Permanently delete a student's admission record, along with
+ *          their payments, installments, notifications, and login account.
+ * @route   DELETE /api/students/:id
+ * @access  Admin
+ */
+export const deleteStudent = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      throw new NotFoundError('Student not found');
+    }
+
+    await Promise.all([
+      Payment.deleteMany({ studentId: student._id }),
+      Installment.deleteMany({ studentId: student._id }),
+      Notification.deleteMany({ recipientId: student.userId }),
+      User.deleteOne({ _id: student.userId }),
+    ]);
+
+    await student.deleteOne();
+
+    sendResponse(res, { message: 'Student deleted successfully' });
   }
 );
 

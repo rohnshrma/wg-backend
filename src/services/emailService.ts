@@ -1,16 +1,5 @@
-import nodemailer from "nodemailer";
 import { env } from "../config/env";
-
-// Create transporter
-const transporter = nodemailer.createTransport({
-  host: env.SMTP_HOST || "smtp.gmail.com",
-  port: Number(env.SMTP_PORT) || 587,
-  secure: false,
-  auth: {
-    user: env.SMTP_USER,
-    pass: env.SMTP_PASS,
-  },
-});
+import transporter from "../config/email";
 
 interface EmailOptions {
   to: string;
@@ -138,6 +127,31 @@ export const sendAdmissionApprovedEmail = (
     ),
   });
 
+// 2b. Admission Rejected Email
+export const sendAdmissionRejectedEmail = (
+  to: string,
+  name: string,
+  reason: string
+) =>
+  sendEmail({
+    to,
+    subject: "Update on Your Admission — WebiGeeks",
+    html: baseTemplate(
+      `
+      <h2>Hi ${name},</h2>
+      <p>Thank you for your interest in WebiGeeks. After reviewing your registration, we're unable to approve it at this time.</p>
+      <div class="info-box">
+        <p><strong>Reason:</strong> ${reason}</p>
+      </div>
+      <p>If you believe this is a mistake or would like to discuss further, please contact our support team.</p>
+      <p style="text-align: center;">
+        <a href="${env.SITE_URL || "https://webigeeks.com"}/contact" class="btn">Contact Support</a>
+      </p>
+      `,
+      "Admission Update"
+    ),
+  });
+
 // 3. Payment Confirmation Email
 export const sendPaymentConfirmationEmail = (
   to: string,
@@ -166,6 +180,35 @@ export const sendPaymentConfirmationEmail = (
       </p>
       `,
       "Payment Confirmation"
+    ),
+  });
+
+// 3b. Payment Receipt (explicit send/resend, includes the actual PDF link)
+export const sendPaymentReceiptEmail = (
+  to: string,
+  name: string,
+  receiptNumber: string,
+  receiptUrl: string,
+  courseName: string,
+  amount: number
+) =>
+  sendEmail({
+    to,
+    subject: `Your Payment Receipt — ${receiptNumber} 🧾`,
+    html: baseTemplate(
+      `
+      <h2>Hi ${name},</h2>
+      <p>Here's your payment receipt, as requested.</p>
+      <div class="info-box">
+        <p><strong>Receipt #:</strong> ${receiptNumber}</p>
+        <p><strong>Amount:</strong> ₹${amount.toLocaleString("en-IN")}</p>
+        <p><strong>Course:</strong> ${courseName}</p>
+      </div>
+      <p style="text-align: center;">
+        <a href="${receiptUrl}" class="btn">Download Receipt PDF</a>
+      </p>
+      `,
+      "Payment Receipt"
     ),
   });
 

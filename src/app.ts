@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import mongoSanitize from 'express-mongo-sanitize';
 import hpp from 'hpp';
 import env from './config/env';
@@ -45,6 +46,9 @@ app.use(
 
 // Handle preflight requests explicitly
 app.options('*', cors());
+
+// Cookie parsing (required for httpOnly auth cookie)
+app.use(cookieParser());
 
 // Data sanitization against NoSQL injection
 app.use(mongoSanitize());

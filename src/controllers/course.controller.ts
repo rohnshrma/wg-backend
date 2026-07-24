@@ -56,6 +56,36 @@ export const getCourseBySlug = asyncHandler(
 );
 
 /**
+ * @desc    Get all courses including inactive, with full fields (admin)
+ * @route   GET /api/courses/admin/all
+ * @access  Admin
+ */
+export const getAllCoursesAdmin = asyncHandler(
+  async (_req: Request, res: Response): Promise<void> => {
+    const courses = await Course.find().sort({ displayOrder: 1, createdAt: -1 });
+
+    sendResponse(res, {
+      message: 'Courses fetched successfully',
+      data: courses,
+    });
+  }
+);
+
+/**
+ * @desc    Get single course by id, any status (admin)
+ * @route   GET /api/courses/admin/:id
+ * @access  Admin
+ */
+export const getCourseByIdAdmin = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const course = await Course.findById(req.params.id);
+    if (!course) throw new NotFoundError('Course not found');
+
+    sendResponse(res, { message: 'Course fetched', data: course });
+  }
+);
+
+/**
  * @desc    Create course
  * @route   POST /api/courses
  * @access  Admin

@@ -1,20 +1,12 @@
 import axios from "axios";
 import { env } from "../config/env";
-
-const WHATSAPP_API_URL = `https://graph.facebook.com/v18.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-
-interface WhatsAppMessage {
-  to: string;
-  template?: string;
-  body?: string;
-  parameters?: string[];
-}
+import whatsappConfig from "../config/whatsapp";
 
 const sendWhatsAppRequest = async (data: any): Promise<boolean> => {
   try {
-    await axios.post(WHATSAPP_API_URL, data, {
+    await axios.post(whatsappConfig.apiUrl, data, {
       headers: {
-        Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${whatsappConfig.accessToken}`,
         "Content-Type": "application/json",
       },
     });
@@ -63,6 +55,17 @@ export const sendAdmissionApprovedWhatsApp = (
     `🎉 *Congratulations, ${name}!*\n\nYour admission has been *APPROVED*.\n\n📋 Details:\n• Admission ID: ${admissionId}\n• Course: ${courseName}\n• Status: ✅ Approved\n\nLogin to your dashboard to view course details and make payment.\n🔗 ${env.SITE_URL || "https://webigeeks.com"}/dashboard`
   );
 
+// 3b. Admission rejected message
+export const sendAdmissionRejectedWhatsApp = (
+  to: string,
+  name: string,
+  reason: string
+) =>
+  sendWhatsAppText(
+    to,
+    `Hi ${name},\n\nThank you for your interest in WebiGeeks. After reviewing your registration, we're unable to approve it at this time.\n\n📋 Reason: ${reason}\n\nContact us if you'd like to discuss further.`
+  );
+
 // 4. Payment received message
 export const sendPaymentWhatsApp = (
   to: string,
@@ -73,6 +76,19 @@ export const sendPaymentWhatsApp = (
   sendWhatsAppText(
     to,
     `✅ *Payment Received, ${name}!*\n\n💰 Amount: ₹${amount.toLocaleString("en-IN")}\n🧾 Receipt: ${receiptNumber}\n\nView history: ${env.SITE_URL || "https://webigeeks.com"}/dashboard/payments\n\nThank you! 🙏`
+  );
+
+// 4b. Payment receipt (explicit send/resend, includes the actual PDF link)
+export const sendPaymentReceiptWhatsApp = (
+  to: string,
+  name: string,
+  receiptNumber: string,
+  receiptUrl: string,
+  amount: number
+) =>
+  sendWhatsAppText(
+    to,
+    `🧾 *Your Payment Receipt, ${name}*\n\n💰 Amount: ₹${amount.toLocaleString("en-IN")}\n🧾 Receipt: ${receiptNumber}\n\n📄 Download: ${receiptUrl}\n\nThank you! 🙏`
   );
 
 // 5. Installment reminder
@@ -105,7 +121,7 @@ export const sendNewLeadWhatsAppToAdmin = (
   course: string,
   source: string
 ) => {
-  const adminPhone = env.ADMIN_WHATSAPP || env.WHATSAPP_PHONE_NUMBER_ID;
+  const adminPhone = env.ADMIN_WHATSAPP;
   if (!adminPhone) return Promise.resolve(false);
   return sendWhatsAppText(
     adminPhone,

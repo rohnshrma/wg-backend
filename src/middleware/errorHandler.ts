@@ -1,6 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { ApiError } from '../utils/apiError';
 import env from '../config/env';
+
+const multerErrorMessages: Record<string, string> = {
+  LIMIT_FILE_SIZE: 'File is too large. Maximum size is 5MB.',
+  LIMIT_UNEXPECTED_FILE: 'Unexpected file field.',
+};
 
 const errorHandler = (
   err: Error,
@@ -19,6 +25,12 @@ const errorHandler = (
     if ('errors' in err) {
       errors = (err as any).errors;
     }
+  }
+
+  // Multer upload errors (file too large, unexpected field, etc.)
+  if (err instanceof multer.MulterError) {
+    statusCode = 400;
+    message = multerErrorMessages[err.code] || err.message;
   }
 
   // Mongoose Validation Error

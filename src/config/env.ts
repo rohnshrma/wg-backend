@@ -1,51 +1,82 @@
 import dotenv from 'dotenv';
+import { z } from 'zod';
+
 dotenv.config();
 
-const env = {
-  NODE_ENV: process.env.NODE_ENV || 'development',
-  PORT: parseInt(process.env.PORT || '5001', 10),
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().default(5001),
 
-  // MongoDB
-  MONGODB_URI: process.env.MONGODB_URI || '',
+    // MongoDB
+    MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
 
-  // JWT
-  JWT_SECRET: process.env.JWT_SECRET || 'fallback-secret-change-in-production',
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
-  JWT_COOKIE_EXPIRES_IN: parseInt(process.env.JWT_COOKIE_EXPIRES_IN || '7', 10),
+    // JWT
+    JWT_SECRET: z
+      .string()
+      .min(32, 'JWT_SECRET must be at least 32 characters')
+      .refine((v) => v !== 'fallback-secret-change-in-production', {
+        message: 'JWT_SECRET must not use the insecure placeholder value',
+      }),
+    JWT_EXPIRES_IN: z.string().default('7d'),
+    JWT_COOKIE_EXPIRES_IN: z.coerce.number().default(7),
 
-  // Cloudinary
-  CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME || '',
-  CLOUDINARY_API_KEY: process.env.CLOUDINARY_API_KEY || '',
-  CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET || '',
+    // Cloudinary
+    CLOUDINARY_CLOUD_NAME: z.string().default(''),
+    CLOUDINARY_API_KEY: z.string().default(''),
+    CLOUDINARY_API_SECRET: z.string().default(''),
 
-  // Email
-  SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
-  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
-  SMTP_USER: process.env.SMTP_USER || '',
-  SMTP_PASS: process.env.SMTP_PASS || '',
-  EMAIL_FROM: process.env.EMAIL_FROM || 'WebiGeeks <noreply@webigeeks.com>',
-  FROM_NAME: process.env.FROM_NAME || 'WebiGeeks',
-  FROM_EMAIL: process.env.FROM_EMAIL || '',
+    // Email
+    SMTP_HOST: z.string().default('smtp.gmail.com'),
+    SMTP_PORT: z.coerce.number().default(587),
+    SMTP_USER: z.string().default(''),
+    SMTP_PASS: z.string().default(''),
+    EMAIL_FROM: z.string().default('WebiGeeks <noreply@webigeeks.com>'),
+    FROM_NAME: z.string().default('WebiGeeks'),
+    FROM_EMAIL: z.string().default(''),
 
-  // WhatsApp
-  WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
-  WHATSAPP_ACCESS_TOKEN: process.env.WHATSAPP_ACCESS_TOKEN || '',
-  WHATSAPP_BUSINESS_ACCOUNT_ID: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
-  WHATSAPP_ADMIN_PHONE: process.env.WHATSAPP_ADMIN_PHONE || '',
-  ADMIN_WHATSAPP: process.env.ADMIN_WHATSAPP || '',
+    // WhatsApp
+    WHATSAPP_PHONE_NUMBER_ID: z.string().default(''),
+    WHATSAPP_ACCESS_TOKEN: z.string().default(''),
+    WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().default(''),
+    WHATSAPP_ADMIN_PHONE: z.string().default(''),
+    ADMIN_WHATSAPP: z.string().default(''),
 
-  // Site
-  SITE_URL: process.env.SITE_URL || 'http://localhost:3000',
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+    // Site
+    SITE_URL: z.string().default('http://localhost:3000'),
+    FRONTEND_URL: z.string().default('http://localhost:3000'),
 
-  // Contact
-  CONTACT_PHONE: process.env.CONTACT_PHONE || '+91 8766367815',
-  CONTACT_EMAIL: process.env.CONTACT_EMAIL || 'webigeeksofficial@gmail.com',
+    // Contact
+    CONTACT_PHONE: z.string().default('+91 8766367815'),
+    CONTACT_EMAIL: z.string().default('webigeeksofficial@gmail.com'),
 
-  // Admin
-  ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'webigeeksofficial@gmail.com',
-  ADMIN_DEFAULT_PASSWORD: process.env.ADMIN_DEFAULT_PASSWORD || 'Admin@123',
-};
+    // Admin
+    ADMIN_EMAIL: z.string().email('ADMIN_EMAIL must be a valid email'),
+    ADMIN_DEFAULT_PASSWORD: z
+      .string()
+      .min(8, 'ADMIN_DEFAULT_PASSWORD must be at least 8 characters'),
+  })
+  .refine(
+    (data) => data.NODE_ENV !== 'production' || data.ADMIN_DEFAULT_PASSWORD !== 'Admin@123',
+    {
+      message:
+        'ADMIN_DEFAULT_PASSWORD must not be the well-known default "Admin@123" in production',
+      path: ['ADMIN_DEFAULT_PASSWORD'],
+    }
+  );
+
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  console.error('\n❌ Invalid environment configuration:\n');
+  for (const issue of parsed.error.issues) {
+    console.error(`   - ${issue.path.join('.')}: ${issue.message}`);
+  }
+  console.error('\nFix the environment variables above (see .env.example) and restart.\n');
+  process.exit(1);
+}
+
+const env = parsed.data;
 
 export { env };
 export default env;

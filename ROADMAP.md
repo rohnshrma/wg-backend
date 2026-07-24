@@ -9,6 +9,12 @@
 - Admin login: `webigeeksofficial@gmail.com` / `Admin@123` (seed default from `backend/.env` `ADMIN_EMAIL`/`ADMIN_DEFAULT_PASSWORD` — change this in production).
 - To run locally: MongoDB must be running (`brew services start mongodb-community` if needed), then `cd backend && npm run build && npm start` (port 5001), `cd frontend && npm run build && npm start` (port 3000). Avoid `npm run dev` in this sandbox — it hangs; use build+start instead.
 - Backend has a real rate limiter (100 req/15min per IP general, 10/15min auth) — don't hammer it with rapid automated reloads during testing; it's in-memory so restarting the backend clears it.
+- **Worktree gotcha (bit us on 2026-07-24/25):** if working in a git worktree under `.claude/worktrees/`, remember the running dev servers must be built+started from the same checkout you're editing. Building in a worktree but running `npm start` from `/Users/rohan/Desktop/webigeeks/frontend` (the real checkout) silently serves stale code with zero errors — very confusing to debug. Always confirm which checkout the live server is actually running from before trusting a "it's not showing up" result.
+
+## Design — Three.js visual layer (added 2026-07-25)
+- Added `src/components/three/` (`NeuralNetworkScene`, `FloatingShapes`, `Hero3DBackground`) using `three` + `@react-three/fiber` + `@react-three/drei`. Applied sitewide: full treatment on the homepage hero, a lighter "compact" accent on every other public page banner (About, Courses list/detail, Contact, Testimonials, Gallery, Blog list/detail, Login, Register).
+- Real bug hit and fixed: mounting the WebGL canvas immediately on page load competed with each page's Framer Motion entrance animation for the main thread, visibly freezing the fade-in around ~15-20% progress indefinitely (reproduced via `getComputedStyle` on the animating element — opacity was frozen, not just slow). Fixed by delaying canvas mount ~900ms via `setTimeout`, plus trimming node/shape counts and fixing device pixel ratio to 1. If this resurfaces (e.g. on a slower device), check that delay first before assuming it's something else.
+- This pulled in `three`, `@react-three/fiber`, `@react-three/drei` (~150 packages) as a deliberate trade-off over extending the app's existing dependency-free custom `BarChart` component — chosen because line/pie/3D visuals were needed, not just bars.
 
 ## Phase Status Overview
 

@@ -10,15 +10,16 @@
 - To run locally: MongoDB must be running (`brew services start mongodb-community` if needed), then `cd backend && npm run build && npm start` (port 5001), `cd frontend && npm run build && npm start` (port 3000). Avoid `npm run dev` in this sandbox — it hangs; use build+start instead.
 - Backend has a real rate limiter (100 req/15min per IP general, 10/15min auth) — don't hammer it with rapid automated reloads during testing; it's in-memory so restarting the backend clears it.
 - **Worktree gotcha (bit us on 2026-07-24/25):** if working in a git worktree under `.claude/worktrees/`, remember the running dev servers must be built+started from the same checkout you're editing. Building in a worktree but running `npm start` from `/Users/rohan/Desktop/webigeeks/frontend` (the real checkout) silently serves stale code with zero errors — very confusing to debug. Always confirm which checkout the live server is actually running from before trusting a "it's not showing up" result.
+- **Low-memory machine gotcha (2026-07-25):** this machine runs low on free RAM during long sessions (many dev servers + browser + editor open at once). `git push` can fail with `pack-objects died of signal 10` (SIGBUS) under memory pressure even on a tiny repo. Fix: retry with `git -c pack.threads=1 -c pack.windowMemory=10m push ...`. Also: `next start` has been observed to silently die with no error in its log under the same pressure — if a "running" server stops responding, just check `ps aux | grep next-server` and restart it.
 
 ## Design — Three.js visual layer (added 2026-07-25)
 - Added `src/components/three/` (`NeuralNetworkScene`, `FloatingShapes`, `Hero3DBackground`) using `three` + `@react-three/fiber` + `@react-three/drei`. Applied sitewide: full treatment on the homepage hero, a lighter "compact" accent on every other public page banner (About, Courses list/detail, Contact, Testimonials, Gallery, Blog list/detail, Login, Register).
 - Real bug hit and fixed: mounting the WebGL canvas immediately on page load competed with each page's Framer Motion entrance animation for the main thread, visibly freezing the fade-in around ~15-20% progress indefinitely (reproduced via `getComputedStyle` on the animating element — opacity was frozen, not just slow). Fixed by delaying canvas mount ~900ms via `setTimeout`, plus trimming node/shape counts and fixing device pixel ratio to 1. If this resurfaces (e.g. on a slower device), check that delay first before assuming it's something else.
 - This pulled in `three`, `@react-three/fiber`, `@react-three/drei` (~150 packages) as a deliberate trade-off over extending the app's existing dependency-free custom `BarChart` component — chosen because line/pie/3D visuals were needed, not just bars.
 
-## Design — Full rebrand: real logo, colors, tagline (2026-07-25)
+## Design — Full rebrand: real logo, colors, tagline (2026-07-25, DONE)
 
-**⚠️ STATUS: DONE IN THE WORKING TREE BUT NOT YET COMMITTED OR PUSHED.** A `git add` was interrupted mid-session at the user's request (they wanted this roadmap update first — nothing was rejected due to a problem with the changes themselves). **Before doing anything else, check `git status` in both `frontend` and `backend` real checkouts — if these files still show as modified/untracked, commit and push them, then delete this warning line.**
+**STATUS: Committed and pushed to `main` on both repos** — frontend `874855f`, backend `f27508e` (color/tagline fixes) on top of `9f099b2` (roadmap). Verified working via browser (homepage, login, admin dashboard) before pushing.
 
 **What triggered it:** user supplied the real logo (`/Users/rohan/Downloads/Untitled design.png`) and asked for the actual brand colors to be used sitewide, plus confirmed tagline "Your AI Skill Partner" (replacing the placeholder "Training & Development").
 
@@ -36,11 +37,10 @@
 
 **Verified working via browser** (after a bad stretch of screenshot-tool flakiness that turned out to be stale/dead browser tab state, not a code bug — fixed by closing stale tabs and opening a fresh tab group): homepage hero (logo, tagline, blue gradient, neural network + orange floating shape, popup form now blue), Login page (logo badge, blue decorative panel), Admin dashboard (sidebar logo, blue welcome banner, stat card icons).
 
-**Remaining gaps — not yet done:**
-1. **Backend email templates still have hardcoded old purple/sky-blue hex colors** in the actual CSS (not just text) — `backend/src/services/emailService.ts` lines ~40, 46, 48, 53 (`.header`/`.btn`/`.info-box`/`.footer a` all use `#6C3CE1`/`#0EA5E9`/`#F5F0FF`), and `backend/src/utils/generateReceiptPdf.ts` line 30 (`fillColor('#6C3CE1')` for the receipt header text color). Text content was fixed; the actual colors were not. Swap these to `#1672B8` (and drop the `#F5F0FF` info-box background to a light blue tint, e.g. `#E3EEF6`) to finish the rebrand.
-2. **Minor cosmetic nit:** on the admin dashboard, the "Courses" stat tile and "Monthly Admissions" chart bar now render in the new dark gray secondary color and look a bit flat/heavy compared to before (when secondary was a bright sky blue). Not broken, just a visual judgment call — could lighten to a mid-gray tint if it reads as too dark in practice.
-3. Favicon/tab-icon not visually double-checked in an actual browser chrome (only generated + spot-checked as a PNG).
-4. **This entire body of work needs to be committed and pushed** — see the warning at the top of this section.
+**Remaining gaps:**
+1. **Minor cosmetic nit:** on the admin dashboard, the "Courses" stat tile and "Monthly Admissions" chart bar now render in the new dark gray secondary color and look a bit flat/heavy compared to before (when secondary was a bright sky blue). Not broken, just a visual judgment call — could lighten to a mid-gray tint if it reads as too dark in practice.
+2. Favicon/tab-icon not visually double-checked in an actual browser chrome (only generated + spot-checked as a PNG).
+3. `npm audit` shows some high-severity advisories in transitive deps pulled in by `recharts` and `@react-three/*` — not investigated, likely fine for a training-site admin panel but worth a look before considering this production-hardened (Phase 10/11 territory).
 
 ## Phase Status Overview
 

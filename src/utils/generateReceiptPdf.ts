@@ -27,10 +27,10 @@ const buildPdfBuffer = (data: ReceiptData): Promise<Buffer> => {
     doc.on('error', reject);
 
     doc
-      .fillColor('#6C3CE1')
+      .fillColor('#1672B8')
       .fontSize(22)
       .font('Helvetica-Bold')
-      .text('WebiGeeks Training & Development', { align: 'center' });
+      .text('WebiGeeks — Your AI Skill Partner', { align: 'center' });
     doc
       .fillColor('#475569')
       .fontSize(10)
@@ -70,7 +70,7 @@ const buildPdfBuffer = (data: ReceiptData): Promise<Buffer> => {
       .fontSize(9)
       .fillColor('#94A3B8')
       .text(
-        `This is a system-generated receipt from WebiGeeks Training & Development. Contact ${env.CONTACT_EMAIL} for queries.`,
+        `This is a system-generated receipt from WebiGeeks, your AI skill partner. Contact ${env.CONTACT_EMAIL} for queries.`,
         { align: 'center' }
       );
 

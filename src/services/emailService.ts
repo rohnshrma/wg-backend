@@ -37,20 +37,20 @@ const baseTemplate = (content: string, title: string) => `
   <style>
     body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6fb; }
     .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    .header { background: linear-gradient(135deg, #6C3CE1 0%, #0EA5E9 100%); padding: 32px 24px; text-align: center; }
+    .header { background: linear-gradient(135deg, #1672B8 0%, #606062 100%); padding: 32px 24px; text-align: center; }
     .header h1 { margin: 0; color: #fff; font-size: 24px; font-weight: 800; }
     .header p { margin: 8px 0 0; color: rgba(255,255,255,0.7); font-size: 14px; }
     .body { padding: 32px 24px; }
     .body h2 { color: #0F172A; font-size: 20px; margin: 0 0 16px; }
     .body p { color: #475569; font-size: 15px; line-height: 1.7; margin: 0 0 16px; }
-    .btn { display: inline-block; background: linear-gradient(135deg, #6C3CE1 0%, #0EA5E9 100%); color: #fff !important; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 15px; margin: 8px 0; }
+    .btn { display: inline-block; background: linear-gradient(135deg, #1672B8 0%, #606062 100%); color: #fff !important; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 15px; margin: 8px 0; }
     .btn-accent { background: linear-gradient(135deg, #F97316 0%, #EAB308 100%); }
-    .info-box { background: #F5F0FF; border-left: 4px solid #6C3CE1; padding: 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+    .info-box { background: #E3EEF6; border-left: 4px solid #1672B8; padding: 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
     .info-box p { margin: 4px 0; color: #475569; font-size: 14px; }
     .info-box strong { color: #0F172A; }
     .footer { background: #0F172A; padding: 24px; text-align: center; }
     .footer p { color: rgba(255,255,255,0.4); font-size: 12px; margin: 4px 0; }
-    .footer a { color: #6C3CE1; text-decoration: none; }
+    .footer a { color: #1672B8; text-decoration: none; }
     .divider { border: none; border-top: 1px solid #E2E8F0; margin: 24px 0; }
   </style>
 </head>
@@ -59,13 +59,13 @@ const baseTemplate = (content: string, title: string) => `
     <div class="container">
       <div class="header">
         <h1>🎓 WebiGeeks</h1>
-        <p>Training & Development</p>
+        <p>Your AI Skill Partner</p>
       </div>
       <div class="body">
         ${content}
       </div>
       <div class="footer">
-        <p>WebiGeeks Training & Development</p>
+        <p>WebiGeeks — Your AI Skill Partner</p>
         <p>📞 ${env.CONTACT_PHONE || "+91 8766367815"} | ✉️ ${env.CONTACT_EMAIL || "webigeeksofficial@gmail.com"}</p>
         <p style="margin-top: 8px;"><a href="${env.SITE_URL || "https://webigeeks.com"}">Visit Website</a></p>
       </div>
@@ -83,7 +83,7 @@ export const sendWelcomeEmail = (to: string, name: string) =>
     html: baseTemplate(
       `
       <h2>Welcome, ${name}! 👋</h2>
-      <p>Thank you for registering with <strong>WebiGeeks Training & Development</strong>. We're excited to have you on board!</p>
+      <p>Thank you for registering with <strong>WebiGeeks</strong>, your AI skill partner. We're excited to have you on board!</p>
       <p>Your account has been created successfully. Here's what you need to do next:</p>
       <div class="info-box">
         <p><strong>Step 1:</strong> Complete your profile with all required details</p>

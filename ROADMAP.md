@@ -16,6 +16,32 @@
 - Real bug hit and fixed: mounting the WebGL canvas immediately on page load competed with each page's Framer Motion entrance animation for the main thread, visibly freezing the fade-in around ~15-20% progress indefinitely (reproduced via `getComputedStyle` on the animating element — opacity was frozen, not just slow). Fixed by delaying canvas mount ~900ms via `setTimeout`, plus trimming node/shape counts and fixing device pixel ratio to 1. If this resurfaces (e.g. on a slower device), check that delay first before assuming it's something else.
 - This pulled in `three`, `@react-three/fiber`, `@react-three/drei` (~150 packages) as a deliberate trade-off over extending the app's existing dependency-free custom `BarChart` component — chosen because line/pie/3D visuals were needed, not just bars.
 
+## Design — Full rebrand: real logo, colors, tagline (2026-07-25)
+
+**⚠️ STATUS: DONE IN THE WORKING TREE BUT NOT YET COMMITTED OR PUSHED.** A `git add` was interrupted mid-session at the user's request (they wanted this roadmap update first — nothing was rejected due to a problem with the changes themselves). **Before doing anything else, check `git status` in both `frontend` and `backend` real checkouts — if these files still show as modified/untracked, commit and push them, then delete this warning line.**
+
+**What triggered it:** user supplied the real logo (`/Users/rohan/Downloads/Untitled design.png`) and asked for the actual brand colors to be used sitewide, plus confirmed tagline "Your AI Skill Partner" (replacing the placeholder "Training & Development").
+
+**Exact brand colors extracted via pixel sampling (not eyeballed):**
+- Blue `#1672B8` → replaces old purple primary (`#6C3CE1`) everywhere.
+- Gray `#606062` → replaces old sky-blue secondary (`#0EA5E9`) everywhere.
+- Full computed scale (50/100/200/500/600/700/900 + dark/light variants) is in `frontend/src/app/globals.css` under `@theme`. Orange accent (`#F97316`/`#EAB308`) was deliberately kept unchanged — it's a CTA color, not tied to the logo, and still reads well against the new blue/gray.
+
+**Logo assets created** (from the source PNG, background chroma-keyed to transparent):
+- `frontend/public/images/logo.png` — full lockup (mark + "WEBIGEEKS" wordmark), for large placements.
+- `frontend/public/images/logo-mark.png` — icon-only crop (no wordmark), used in every navbar/sidebar/header slot next to the existing styled "WebiGeeks" text.
+- `frontend/public/images/icon-512.png` + `frontend/src/app/favicon.ico` — regenerated from the mark, centered on a padded square canvas. **Not yet visually confirmed in an actual browser tab icon** — worth a quick look.
+
+**Everywhere the logo/tagline/colors were swapped in:** `Navbar.tsx` (desktop + mobile), `Footer.tsx`, `admin/layout.tsx` sidebar, `dashboard/layout.tsx` sidebar, `LoginContent.tsx`, `RegisterContent.tsx`, `ForgotPasswordContent.tsx`, `ResetPasswordContent.tsx` (both the big decorative-panel icon and the small compact header icon on each), `config/site.ts` tagline field, `app/layout.tsx` metadata (title/siteName/twitter/theme-color), `about/page.tsx` + `gallery/page.tsx` meta descriptions, and the Three.js components' hardcoded hex colors (`NeuralNetworkScene`, `FloatingShapes`, `Hero3DBackground`, `admin/analytics/page.tsx` chart colors). Backend: `emailService.ts` (header/footer/welcome-email text) and `generateReceiptPdf.ts` (header + footer text) had their "Training & Development" text updated.
+
+**Verified working via browser** (after a bad stretch of screenshot-tool flakiness that turned out to be stale/dead browser tab state, not a code bug — fixed by closing stale tabs and opening a fresh tab group): homepage hero (logo, tagline, blue gradient, neural network + orange floating shape, popup form now blue), Login page (logo badge, blue decorative panel), Admin dashboard (sidebar logo, blue welcome banner, stat card icons).
+
+**Remaining gaps — not yet done:**
+1. **Backend email templates still have hardcoded old purple/sky-blue hex colors** in the actual CSS (not just text) — `backend/src/services/emailService.ts` lines ~40, 46, 48, 53 (`.header`/`.btn`/`.info-box`/`.footer a` all use `#6C3CE1`/`#0EA5E9`/`#F5F0FF`), and `backend/src/utils/generateReceiptPdf.ts` line 30 (`fillColor('#6C3CE1')` for the receipt header text color). Text content was fixed; the actual colors were not. Swap these to `#1672B8` (and drop the `#F5F0FF` info-box background to a light blue tint, e.g. `#E3EEF6`) to finish the rebrand.
+2. **Minor cosmetic nit:** on the admin dashboard, the "Courses" stat tile and "Monthly Admissions" chart bar now render in the new dark gray secondary color and look a bit flat/heavy compared to before (when secondary was a bright sky blue). Not broken, just a visual judgment call — could lighten to a mid-gray tint if it reads as too dark in practice.
+3. Favicon/tab-icon not visually double-checked in an actual browser chrome (only generated + spot-checked as a PNG).
+4. **This entire body of work needs to be committed and pushed** — see the warning at the top of this section.
+
 ## Phase Status Overview
 
 | Phase | Name | Status | Notes |

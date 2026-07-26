@@ -28,11 +28,9 @@ export const submitInquiry = asyncHandler(
       source: source || 'hero_form',
     });
 
-    try {
-      await NotificationService.newLead(name, phone, email, courseInterested, lead.source);
-    } catch (error) {
+    NotificationService.newLead(name, phone, email, courseInterested, lead.source).catch((error) => {
       console.error('Failed to send new-lead notification:', error);
-    }
+    });
 
     sendResponse(res, {
       statusCode: 201,

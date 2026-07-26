@@ -9,7 +9,14 @@ const transporter = nodemailer.createTransport({
     user: env.SMTP_USER,
     pass: env.SMTP_PASS,
   },
-});
+  // Some hosts (e.g. Render) have no outbound IPv6 route, which makes Gmail's
+  // IPv6 SMTP address hang/ENETUNREACH instead of falling back quickly.
+  // `family` isn't in @types/nodemailer's Options but is supported at runtime.
+  family: 4,
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
+} as nodemailer.TransportOptions);
 
 // Verify connection on startup
 transporter.verify((error) => {

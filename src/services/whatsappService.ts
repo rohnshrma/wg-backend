@@ -9,6 +9,7 @@ const sendWhatsAppRequest = async (data: any): Promise<boolean> => {
         Authorization: `Bearer ${whatsappConfig.accessToken}`,
         "Content-Type": "application/json",
       },
+      timeout: 10000,
     });
     console.log("📱 WhatsApp message sent");
     return true;

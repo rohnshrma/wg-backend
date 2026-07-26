@@ -301,18 +301,16 @@ export const approveStudent = asyncHandler(
       link: '/dashboard',
     });
 
-    try {
-      const courseName = (student.courseId as any)?.title || 'your course';
-      await NotificationService.admissionApproved(
-        student.email,
-        student.studentContactNumber,
-        student.fullName,
-        admissionId,
-        courseName
-      );
-    } catch (error) {
+    const courseName = (student.courseId as any)?.title || 'your course';
+    NotificationService.admissionApproved(
+      student.email,
+      student.studentContactNumber,
+      student.fullName,
+      admissionId,
+      courseName
+    ).catch((error) => {
       console.error('Failed to send admission-approved notification:', error);
-    }
+    });
 
     sendResponse(res, {
       message: 'Student approved successfully',
@@ -356,16 +354,14 @@ export const rejectStudent = asyncHandler(
       link: '/dashboard/profile',
     });
 
-    try {
-      await NotificationService.admissionRejected(
-        student.email,
-        student.studentContactNumber,
-        student.fullName,
-        reason
-      );
-    } catch (error) {
+    NotificationService.admissionRejected(
+      student.email,
+      student.studentContactNumber,
+      student.fullName,
+      reason
+    ).catch((error) => {
       console.error('Failed to send admission-rejected notification:', error);
-    }
+    });
 
     sendResponse(res, {
       message: 'Student rejected',

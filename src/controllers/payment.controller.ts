@@ -75,19 +75,17 @@ const recordPaymentAndNotify = async (params: {
     paymentDate: paymentDate || new Date(),
   });
 
-  try {
-    await NotificationService.paymentReceived(
-      student.email,
-      student.studentContactNumber,
-      student.fullName,
-      amount,
-      receiptNumber,
-      courseName,
-      student.pendingAmount
-    );
-  } catch (error) {
+  NotificationService.paymentReceived(
+    student.email,
+    student.studentContactNumber,
+    student.fullName,
+    amount,
+    receiptNumber,
+    courseName,
+    student.pendingAmount
+  ).catch((error) => {
     console.error('Failed to send payment-received notification:', error);
-  }
+  });
 
   return payment;
 };

@@ -59,11 +59,9 @@ export const register = asyncHandler(
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
 
-    try {
-      await NotificationService.welcome(user.email, user.email.split('@')[0]);
-    } catch (error) {
+    NotificationService.welcome(user.email, user.email.split('@')[0]).catch((error) => {
       console.error('Failed to send welcome email:', error);
-    }
+    });
 
     sendResponse(res, {
       statusCode: 201,
@@ -175,11 +173,9 @@ export const forgotPassword = asyncHandler(
 
     const resetUrl = `${env.FRONTEND_URL}/reset-password/${resetToken}`;
 
-    try {
-      await NotificationService.passwordReset(user.email, resetUrl);
-    } catch (error) {
+    NotificationService.passwordReset(user.email, resetUrl).catch((error) => {
       console.error('Failed to send password reset email:', error);
-    }
+    });
 
     sendResponse(res, {
       message: 'If an account with that email exists, a reset link has been sent',

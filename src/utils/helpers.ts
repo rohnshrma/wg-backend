@@ -12,6 +12,54 @@ export const generateSlug = (text: string): string => {
 };
 
 /**
+ * Normalize `page`/`limit` query params into safe, positive values.
+ * Guards against negative/NaN pages producing a negative `skip` (which makes
+ * MongoDB throw) and against unbounded `limit` values.
+ */
+export const getPagination = (
+  page: unknown,
+  limit: unknown,
+  defaultLimit = 10,
+  maxLimit = 100
+): { page: number; limit: number; skip: number } => {
+  const parsedPage = parseInt(page as string, 10);
+  const parsedLimit = parseInt(limit as string, 10);
+
+  const safePage = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const safeLimit =
+    Number.isFinite(parsedLimit) && parsedLimit > 0
+      ? Math.min(parsedLimit, maxLimit)
+      : defaultLimit;
+
+  return { page: safePage, limit: safeLimit, skip: (safePage - 1) * safeLimit };
+};
+
+/**
+ * Generate a slug that is unique for the given mongoose model, appending a
+ * numeric suffix on collision (my-post, my-post-2, my-post-3, ...).
+ * `excludeId` lets an update keep its own slug.
+ */
+export const generateUniqueSlug = async (
+  model: { exists: (filter: Record<string, unknown>) => Promise<unknown> },
+  text: string,
+  excludeId?: string
+): Promise<string> => {
+  const base = generateSlug(text) || 'untitled';
+  let slug = base;
+  let suffix = 1;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const filter: Record<string, unknown> = { slug };
+    if (excludeId) filter._id = { $ne: excludeId };
+    const clash = await model.exists(filter);
+    if (!clash) return slug;
+    suffix += 1;
+    slug = `${base}-${suffix}`;
+  }
+};
+
+/**
  * Generate admission ID in format: WEBI2026001
  */
 export const generateAdmissionId = (year: number, sequence: number): string => {

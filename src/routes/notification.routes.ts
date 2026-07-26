@@ -3,19 +3,20 @@ import { protect, authorize } from '../middleware/auth.middleware';
 import Notification from '../models/Notification';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
+import { NotFoundError } from '../utils/apiError';
+import { getPagination } from '../utils/helpers';
 
 const router = Router();
 
 // Get my notifications
 router.get('/', protect, asyncHandler(async (req: Request, res: Response) => {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 20;
+  const { page, limit, skip } = getPagination(req.query.page, req.query.limit, 20);
 
   const query = { recipientId: req.user._id };
   const total = await Notification.countDocuments(query);
   const notifications = await Notification.find(query)
     .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
+    .skip(skip)
     .limit(limit);
 
   const unreadCount = await Notification.countDocuments({
@@ -30,9 +31,14 @@ router.get('/', protect, asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
-// Mark as read
+// Mark as read (only the recipient may mark their own notification)
 router.patch('/:id/read', protect, asyncHandler(async (req: Request, res: Response) => {
-  await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
+  const notification = await Notification.findOneAndUpdate(
+    { _id: req.params.id, recipientId: req.user._id },
+    { isRead: true },
+    { new: true }
+  );
+  if (!notification) throw new NotFoundError('Notification not found');
   sendResponse(res, { message: 'Notification marked as read' });
 }));
 

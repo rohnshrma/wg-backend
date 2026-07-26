@@ -74,7 +74,6 @@ export const register = asyncHandler(
           email: user.email,
           role: user.role,
         },
-        token,
       },
     });
   }
@@ -121,7 +120,6 @@ export const login = asyncHandler(
           email: user.email,
           role: user.role,
         },
-        token,
       },
     });
   }
@@ -232,7 +230,6 @@ export const resetPassword = asyncHandler(
           email: user.email,
           role: user.role,
         },
-        token: authToken,
       },
     });
   }
@@ -294,7 +291,6 @@ export const changePassword = asyncHandler(
 
     sendResponse(res, {
       message: 'Password changed successfully',
-      data: { token },
     });
   }
 );

@@ -1,6 +1,5 @@
-import { sendEmail, sendBroadcastEmail } from "./emailService";
+import { sendBroadcastEmail } from "./emailService";
 import {
-  sendWhatsAppText,
   sendWelcomeWhatsApp,
   sendAdmissionApprovedWhatsApp,
   sendAdmissionRejectedWhatsApp,

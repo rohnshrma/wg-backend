@@ -15,6 +15,12 @@ router.get('/', asyncHandler(async (_req: Request, res: Response) => {
   sendResponse(res, { message: 'Testimonials fetched', data: testimonials });
 }));
 
+// Admin — list all, including inactive
+router.get('/admin/all', protect, authorize('admin'), asyncHandler(async (_req: Request, res: Response) => {
+  const testimonials = await Testimonial.find().sort({ displayOrder: 1, createdAt: -1 });
+  sendResponse(res, { message: 'Testimonials fetched', data: testimonials });
+}));
+
 // Admin CRUD
 router.post('/', protect, authorize('admin'), asyncHandler(async (req: Request, res: Response) => {
   const testimonial = await Testimonial.create(req.body);

@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { protect, authorize } from '../middleware/auth.middleware';
+import validate from '../middleware/validate.middleware';
+import { studentProfileSchema } from '../validations/student.validation';
 import {
   getAllStudents,
   getStudentById,
@@ -15,7 +17,13 @@ const router = Router();
 
 // Student self-service
 router.get('/me/dashboard', protect, authorize('student'), getMyDashboard);
-router.put('/profile', protect, authorize('student'), updateMyProfile);
+router.put(
+  '/profile',
+  protect,
+  authorize('student'),
+  validate(studentProfileSchema),
+  updateMyProfile
+);
 
 // Admin routes
 router.get('/', protect, authorize('admin'), getAllStudents);

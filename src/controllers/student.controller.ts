@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response } from 'express';
 import Student from '../models/Student';
 import User from '../models/User';
 import Counter from '../models/Counter';
@@ -9,6 +9,7 @@ import Installment from '../models/Installment';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
+import { getPagination } from '../utils/helpers';
 import {
   BadRequestError,
   NotFoundError,
@@ -22,8 +23,7 @@ import {
  */
 export const getAllStudents = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
+    const { page, limit, skip } = getPagination(req.query.page, req.query.limit, 10);
     const status = req.query.status as string;
     const search = req.query.search as string;
     const courseId = req.query.courseId as string;
@@ -44,7 +44,7 @@ export const getAllStudents = asyncHandler(
     const students = await Student.find(query)
       .populate('courseId', 'title slug')
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
+      .skip(skip)
       .limit(limit);
 
     sendResponse(res, {
@@ -125,7 +125,10 @@ export const updateMyProfile = asyncHandler(
       },
       qualification: req.body.qualification || '',
       courseId: req.body.courseId || undefined,
-      courseFees: req.body.courseFees ?? course?.fees ?? 0,
+      // Fees are always derived from the selected course — never taken from the
+      // request body, or a student could set their own fee (and therefore their
+      // own pendingAmount, which is computed as courseFees - totalPaid).
+      courseFees: course?.fees ?? student?.courseFees ?? 0,
       joiningDate: req.body.joiningDate || new Date(),
       paymentMode: req.body.paymentMode || 'emi',
     };
@@ -156,6 +159,45 @@ export const updateMyProfile = asyncHandler(
   }
 );
 
+// Fields a student may edit on their own record via the generic update route.
+// Deliberately excludes admin-only fields (status, isProfileLocked, totalPaid,
+// pendingAmount, approvedBy, approvedAt, admissionId, rejectionReason, userId, etc.)
+// which must only be changed via the dedicated approve/reject/payment endpoints.
+const STUDENT_SELF_EDITABLE_FIELDS = [
+  'fullName',
+  'dateOfBirth',
+  'gender',
+  'photoUrl',
+  'aadhaarUrl',
+  'fatherName',
+  'motherName',
+  'parentContactNumber',
+  'studentContactNumber',
+  'email',
+  'qualification',
+  'courseId',
+  'joiningDate',
+  'paymentMode',
+] as const;
+// NOTE: 'courseFees' is intentionally NOT self-editable — it is derived from
+// the chosen course below, since pendingAmount = courseFees - totalPaid.
+
+function pickSelfEditableFields(body: Record<string, any>): Record<string, any> {
+  const payload: Record<string, any> = {};
+  for (const key of STUDENT_SELF_EDITABLE_FIELDS) {
+    if (body[key] !== undefined) payload[key] = body[key];
+  }
+  if (body.address !== undefined) {
+    payload.address = {
+      street: body.address?.street ?? '',
+      city: body.address?.city ?? '',
+      state: body.address?.state ?? '',
+      pincode: body.address?.pincode ?? '',
+    };
+  }
+  return payload;
+}
+
 /**
  * @desc    Update student profile
  * @route   PUT /api/students/:id
@@ -169,8 +211,10 @@ export const updateStudent = asyncHandler(
       throw new NotFoundError('Student not found');
     }
 
+    const isAdminUpdate = req.user.role === 'admin';
+
     // Check if student is trying to edit after approval
-    if (req.user.role === 'student') {
+    if (!isAdminUpdate) {
       if (student.userId.toString() !== req.user._id.toString()) {
         throw new ForbiddenError('You can only edit your own profile');
       }
@@ -181,13 +225,24 @@ export const updateStudent = asyncHandler(
       }
     }
 
-    // If admin updates, notify student
-    const isAdminUpdate = req.user.role === 'admin';
+    // Admins may update any field; students are restricted to an allowlist
+    // so they can't self-assign approval status, payment totals, etc.
+    const updatePayload = isAdminUpdate
+      ? req.body
+      : pickSelfEditableFields(req.body);
+
+    // When a student switches course, re-derive the fee from the course record
+    // rather than trusting any client-supplied amount.
+    if (!isAdminUpdate && updatePayload.courseId) {
+      const course = await Course.findById(updatePayload.courseId);
+      if (!course) throw new BadRequestError('Selected course not found');
+      updatePayload.courseFees = course.fees;
+    }
 
     // Update fields
     const updatedStudent = await Student.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: updatePayload },
       { new: true, runValidators: true }
     );
 

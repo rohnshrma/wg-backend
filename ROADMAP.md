@@ -46,18 +46,48 @@
 
 | Phase | Name | Status | Notes |
 |---|---|---|---|
-| 1 | Authentication, Security, RBAC | NOT AUDITED | Password reset flow (cookie-based JWT auth) exists and was committed 2026-07-24; not yet feature-audited. |
-| 2 | Public Website | SPOT-CHECKED OK | Home/Courses/About/Testimonials/Gallery/Blog/Contact/Register all render without errors (2026-07-24 smoke test). See known gap below re: Testimonials data wiring. |
+| 1 | Authentication, Security, RBAC | AUDITED, FIXED | Audited 2026-07-25: fixed a mass-assignment vuln in `PUT /api/students/:id`, added rate limiting to change-password, removed JWT from response bodies, added zod validation to the student profile route. See Phase 1 section below. |
+| 2 | Public Website | SPOT-CHECKED OK, CMS WIRED | Testimonials/Gallery/Blog now read real backend data (2026-07-25) — see CMS section below. Home/Courses/About/Contact/Register still only smoke-tested (2026-07-24). |
 | 3 | Courses Module | SPOT-CHECKED OK | Admin course list (10 courses) + edit form load correctly. |
-| 4 | Student Registration | NOT AUDITED | |
-| 5 | Student Dashboard | NOT AUDITED | Briefly glimpsed via accidental autofill login — Overview page rendered fine, not deliberately tested. |
-| 6 | Admin Dashboard | SPOT-CHECKED OK | Home dashboard, Students, Leads, Payments, Testimonials, Gallery, Notifications, Settings all load without errors. |
-| 7 | Communication (Email/WhatsApp) | IN PROGRESS | Gmail SMTP app password configured 2026-07-23, not yet end-to-end verified with a real send. WhatsApp Cloud API onboarding blocked by Meta "Onboarding failure" (CSP/fetch error in embedded Quickstart flow) — unresolved as of 2026-07-24. |
+| 4 | Student Registration | AUDITED | Audited 2026-07-25 — structurally sound; only defect was the mass-assignment issue shared with Phase 1, now fixed. |
+| 5 | Student Dashboard | AUDITED, OK | Audited 2026-07-25 — every page (Overview, Course, Payments, Documents, Notifications, Profile) reviewed against its source; all fully wired to real endpoints, no mock data, no broken links. |
+| 6 | Admin Dashboard | SPOT-CHECKED OK, CMS WIRED | Home dashboard, Students, Leads, Payments, Notifications, Settings load without errors. Testimonials/Gallery/Blogs admin CRUD built out 2026-07-25 (previously non-functional stubs) — see CMS section below. |
+| 7 | Communication (Email/WhatsApp) | IN PROGRESS | Gmail SMTP app password configured 2026-07-23, not yet end-to-end verified with a real send. WhatsApp Cloud API onboarding blocked by Meta "Onboarding failure" (CSP/fetch error in embedded Quickstart flow) — unresolved as of 2026-07-24. Requires the account owner present (Meta business identity/2FA) — not something to attempt unattended. |
 | 8 | Payments | SPOT-CHECKED OK | Admin payments list (2 records) renders correctly. Full payment/Razorpay flow not tested. |
 | 9 | Analytics | DONE | Completed 2026-07-24. Backend + frontend build clean, verified against real running app with real data via browser. |
 | 10 | Performance/SEO/Accessibility | NOT STARTED | |
-| 11 | Testing | NOT STARTED | No automated test suite exists yet. |
-| 12 | Deployment | NOT STARTED | |
+| 11 | Testing | IN PROGRESS | Started 2026-07-25 — Jest+supertest+mongodb-memory-server backend suite and Vitest+RTL frontend suite added, scoped to auth/RBAC and the new CMS routes/pages. Not yet app-wide coverage. |
+| 12 | Deployment | NOT STARTED | Needs a hosting/infra decision (provider, domain, production secrets) — a business call, not something to infer or scaffold unattended. |
+
+---
+
+## Phase 1 audit + CMS wiring — Security hardening, Testimonials/Gallery/Blog (2026-07-25)
+
+**Trigger:** continuing the roadmap in autonomous mode — picked the highest-value concrete work: audit Phases 1/4/5 (all marked NOT AUDITED) and close the previously-flagged gap where Testimonials/Gallery/Blog had full backend CRUD but zero frontend wiring (public pages hardcoded, admin pages non-functional stubs).
+
+**Security fixes (`wg-backend`):**
+- **Mass-assignment vuln fixed**: `PUT /api/students/:id` (`student.controller.ts`) previously did `Student.findByIdAndUpdate(id, { $set: req.body })` for a logged-in student's own record with no field allowlist — a student could set `status: 'approved'`, `isProfileLocked: false`, `totalPaid`, `admissionId`, etc. on themselves. Fixed with `pickSelfEditableFields()`, an explicit allowlist; admins still get full-field access. **Verified live**: registered a test student, attempted to self-set `status`/`isProfileLocked`/`totalPaid`/`admissionId` via the API — all silently ignored; a legitimate field (`fullName`) still went through.
+- `PUT /api/auth/change-password` was missing the `authLimiter` that `verify-password` already had — added.
+- Login/register/reset/change-password no longer return the JWT in the response body (cookie is the sole auth channel) — confirmed via `wg-frontend/src/lib/api.ts` that the frontend never read the body token, so this was pure unnecessary XSS exposure with nothing depending on it.
+- Added a zod validation schema (`validations/student.validation.ts`) to the student profile route, matching the existing `auth.validation.ts` pattern (previously relied solely on Mongoose `required` checks).
+- Added the backend's first ESLint config (`.eslintrc.json` — legacy format, since the installed ESLint is 8.57.x, not flat-config-native) — `npm run lint` was previously a silent no-op with zero config despite the deps being installed. Fixed the handful of findings (unused imports, one `no-namespace` false-positive on the standard Express `Request` type-augmentation pattern).
+
+**CMS wiring (`wg-frontend` + `wg-backend`):**
+- Public `/testimonials`, `/gallery`, `/blog`, `/blog/[slug]` now fetch real data server-side via `lib/{testimonials,gallery,blog}.ts` (same ISR pattern as the existing `lib/courses.ts` — ISR revalidate 60s), replacing hardcoded placeholder arrays. Empty states added for when there's no content yet.
+- Admin `/admin/testimonials`, `/admin/gallery`, `/admin/blogs` — built out full list/create/edit/delete UIs (previously static unwired stubs), reusing the existing `admin/courses` list-page and `ConfirmDeleteModal` conventions.
+- Backend: added `GET /admin/all` (testimonials, gallery) and `GET /admin/all` + `GET /admin/:id` (blogs) admin-only listing endpoints, since the public endpoints filter to `isActive`/`isPublished` only — mirrors the existing `courses/admin/all` pattern.
+- `next.config.ts`: added `images.remotePatterns` for `res.cloudinary.com` so gallery/blog/testimonial images can use `next/image` (previously unset — no remote image rendering was configured anywhere in the app).
+- **Verified live end-to-end** via browser + API: created a real testimonial through the admin UI, confirmed it appeared on the public page after ISR revalidation; created a blog post via API (Cloudinary not configured in this dev environment, so the UI upload step itself couldn't be exercised — see below) and confirmed it rendered correctly on both the admin edit page and the public detail page including cover image, tags, and metadata.
+
+**Known limitation — Cloudinary not configured in this environment:** image uploads (`DocumentUploadField` → `/api/upload/image`) return a graceful 503 rather than crashing, by existing design (`assertCloudinaryConfigured`), but this means the gallery/testimonial/blog *upload* UI paths themselves weren't exercised end-to-end here — only verified via direct API calls with a pre-existing image URL. Needs real Cloudinary credentials in `.env` to fully verify the upload flow.
+
+**Dev environment note:** this checkout had no `.env` and no local MongoDB (this appears to be a fresh machine/checkout, distinct from the one referenced elsewhere in this file). Set up a local-only dev MongoDB via `mongodb-memory-server` (`scripts/devMongo.ts` — run with `npx ts-node scripts/devMongo.ts`, binds to `mongodb://127.0.0.1:27017/webigeeks`, persists to `.devdata/` which is gitignored) plus a dev-only generated `JWT_SECRET`. This is separate from the `mongodb-memory-server` instance the test suite spins up per-run.
+
+**Frontend lint — pre-existing debt, out of scope this pass:** `npm run lint` in `wg-frontend` has 55 pre-existing errors (confirmed via `git stash` against the last committed baseline, before this session's changes) — mostly `@typescript-eslint/no-explicit-any` in `catch` blocks and a stricter `react-hooks/set-state-in-effect`/`react-hooks/purity` ruleset flagging the app's universal `useEffect(() => { fetchX() }, [])` data-fetching pattern (used in `useAuth.ts`, every dashboard/admin page, and `Math.random()` in the Three.js scene). New CMS files follow the same established convention rather than inventing an inconsistent one-off style. Fixing this properly means touching core auth/rendering code across ~15 files — flagged as Phase 10/11 cleanup, not attempted here to avoid destabilizing critical paths for a lint-only pass.
+
+**Explicitly not attempted (need the user present):**
+- Phase 7 WhatsApp Cloud API onboarding — blocked on an interactive Meta Business account flow tied to the user's own identity/2FA.
+- Phase 12 Deployment — needs a hosting/infra decision and production secrets, a business call.
 
 ---
 

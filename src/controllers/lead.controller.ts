@@ -4,6 +4,7 @@ import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
 import { BadRequestError, NotFoundError } from '../utils/apiError';
+import { getPagination } from '../utils/helpers';
 
 /**
  * @desc    Submit an inquiry (public)
@@ -48,8 +49,7 @@ export const submitInquiry = asyncHandler(
  */
 export const getAllLeads = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 10;
+    const { page, limit, skip } = getPagination(req.query.page, req.query.limit, 10);
     const status = req.query.status as string;
     const source = req.query.source as string;
     const search = req.query.search as string;
@@ -68,7 +68,7 @@ export const getAllLeads = asyncHandler(
     const total = await Lead.countDocuments(query);
     const leads = await Lead.find(query)
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
+      .skip(skip)
       .limit(limit);
 
     sendResponse(res, {

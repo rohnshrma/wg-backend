@@ -7,7 +7,7 @@ import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
 import { generateAndUploadReceipt } from '../utils/generateReceiptPdf';
-import { calculateInstallments } from '../utils/helpers';
+import { calculateInstallments, getPagination } from '../utils/helpers';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/apiError';
 
 const assertOwnsStudentRecord = async (req: Request, studentId: string): Promise<void> => {
@@ -134,8 +134,7 @@ const applyPaymentToInstallments = async (
 };
 
 export const getAllPayments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const page = parseInt(req.query.page as string) || 1;
-  const limit = parseInt(req.query.limit as string) || 10;
+  const { page, limit, skip } = getPagination(req.query.page, req.query.limit, 10);
 
   const total = await Payment.countDocuments();
   const payments = await Payment.find()
@@ -143,7 +142,7 @@ export const getAllPayments = asyncHandler(async (req: Request, res: Response): 
     .populate('courseId', 'title')
     .populate('recordedBy', 'email')
     .sort({ paymentDate: -1 })
-    .skip((page - 1) * limit)
+    .skip(skip)
     .limit(limit);
 
   sendResponse(res, {

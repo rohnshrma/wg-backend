@@ -199,5 +199,35 @@ studentSchema.pre('save', function (next) {
   next();
 });
 
+// `findOneAndUpdate` / `findByIdAndUpdate` bypass the `save` hook above, so
+// recompute the derived pendingAmount whenever courseFees or totalPaid is
+// changed that way (admin edits, profile updates). Without this, pendingAmount
+// silently goes stale and feeds wrong numbers into analytics, the student
+// payments dashboard and the payment/installment validation checks.
+studentSchema.pre('findOneAndUpdate', async function (next) {
+  const update = this.getUpdate() as Record<string, any> | null;
+  if (!update) return next();
+
+  const set = update.$set ?? update;
+  const touchesFees =
+    set.courseFees !== undefined || set.totalPaid !== undefined;
+  if (!touchesFees) return next();
+
+  const current = await this.model.findOne(this.getQuery()).lean<{
+    courseFees?: number;
+    totalPaid?: number;
+  }>();
+  if (!current) return next();
+
+  const courseFees = set.courseFees ?? current.courseFees ?? 0;
+  const totalPaid = set.totalPaid ?? current.totalPaid ?? 0;
+
+  if (update.$set) update.$set.pendingAmount = courseFees - totalPaid;
+  else update.pendingAmount = courseFees - totalPaid;
+
+  this.setUpdate(update);
+  next();
+});
+
 const Student = mongoose.model<IStudent>('Student', studentSchema);
 export default Student;

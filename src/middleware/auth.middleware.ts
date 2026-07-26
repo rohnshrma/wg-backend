@@ -2,10 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import env from '../config/env';
 import User from '../models/User';
-import { UnauthorizedError } from '../utils/apiError';
+import { ForbiddenError, UnauthorizedError } from '../utils/apiError';
 
 // Extend Express Request to include user
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- required TS pattern for augmenting Express's Request type
   namespace Express {
     interface Request {
       user?: any;
@@ -77,8 +78,12 @@ export const authorize = (...roles: string[]) => {
       return;
     }
 
+    // Authenticated but wrong role → 403, not 401. The frontend treats 401 as
+    // "session expired" and force-redirects to /login, so returning 401 here
+    // bounced logged-in users to the login page instead of telling them they
+    // lack permission.
     if (!roles.includes(req.user.role)) {
-      next(new UnauthorizedError(`Role '${req.user.role}' is not authorized to access this resource`));
+      next(new ForbiddenError(`Role '${req.user.role}' is not authorized to access this resource`));
       return;
     }
 

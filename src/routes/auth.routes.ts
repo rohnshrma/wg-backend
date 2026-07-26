@@ -42,6 +42,7 @@ router.get('/me', protect, getMe);
 router.put(
   '/change-password',
   protect,
+  authLimiter,
   validate(changePasswordSchema),
   changePassword
 );

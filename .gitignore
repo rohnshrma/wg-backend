@@ -31,6 +31,9 @@ yarn-error.log*
 # test coverage
 coverage/
 
+# local dev-only MongoDB data (scripts/devMongo.ts)
+.devdata/
+
 # misc
 *.pem
 .claude/

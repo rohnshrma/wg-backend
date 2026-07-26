@@ -18,7 +18,11 @@ const AUTH_COOKIE_NAME = 'token';
 const authCookieOptions = () => ({
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
+  // Frontend and backend are on different domains in production, so the
+  // cookie must be SameSite=None (requires Secure) to be sent on the
+  // cross-site fetch/XHR calls the frontend makes. Lax is fine for local
+  // dev, where both run on http://localhost.
+  sameSite: (env.NODE_ENV === 'production' ? 'none' : 'lax') as const,
   maxAge: env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
   path: '/',
 });

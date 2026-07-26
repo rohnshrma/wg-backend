@@ -90,7 +90,7 @@ router.post('/', protect, authorize('admin'), asyncHandler(async (req: Request, 
   if (typeof req.body.title === 'string' && req.body.title.trim()) {
     req.body.slug = await generateUniqueSlug(Blog, req.body.title);
   }
-  req.body.author = req.user._id;
+  req.body.author = req.user!._id;
   if (req.body.isPublished) req.body.publishedAt = new Date();
   const blog = await Blog.create(req.body);
   sendResponse(res, { statusCode: 201, message: 'Blog created', data: blog });

@@ -77,8 +77,8 @@ export const getStudentById = asyncHandler(
 
     // Students can only view their own profile
     if (
-      req.user.role === 'student' &&
-      student.userId.toString() !== req.user._id.toString()
+      req.user!.role === 'student' &&
+      student.userId.toString() !== req.user!._id.toString()
     ) {
       throw new ForbiddenError('You can only view your own profile');
     }
@@ -97,13 +97,13 @@ export const getStudentById = asyncHandler(
  */
 export const updateMyProfile = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    let student = await Student.findOne({ userId: req.user._id });
+    let student = await Student.findOne({ userId: req.user!._id });
     const course = req.body.courseId ? await Course.findById(req.body.courseId) : null;
     const fullName =
       req.body.fullName ||
       [req.body.firstName, req.body.lastName].filter(Boolean).join(' ').trim() ||
       req.body.name ||
-      req.user.email?.split('@')[0] ||
+      req.user!.email?.split('@')[0] ||
       'Student';
 
     const profilePayload = {
@@ -116,7 +116,7 @@ export const updateMyProfile = asyncHandler(
       motherName: req.body.motherName || '',
       parentContactNumber: req.body.parentContactNumber || req.body.parentPhone || '',
       studentContactNumber: req.body.studentContactNumber || req.body.phone || '',
-      email: req.body.email || req.user.email,
+      email: req.body.email || req.user!.email,
       address: {
         street: req.body.address?.street || req.body.address || '',
         city: req.body.address?.city || req.body.city || '',
@@ -135,7 +135,7 @@ export const updateMyProfile = asyncHandler(
 
     if (!student) {
       student = await Student.create({
-        userId: req.user._id,
+        userId: req.user!._id,
         ...profilePayload,
       });
     } else {
@@ -211,11 +211,11 @@ export const updateStudent = asyncHandler(
       throw new NotFoundError('Student not found');
     }
 
-    const isAdminUpdate = req.user.role === 'admin';
+    const isAdminUpdate = req.user!.role === 'admin';
 
     // Check if student is trying to edit after approval
     if (!isAdminUpdate) {
-      if (student.userId.toString() !== req.user._id.toString()) {
+      if (student.userId.toString() !== req.user!._id.toString()) {
         throw new ForbiddenError('You can only edit your own profile');
       }
       if (student.isProfileLocked) {
@@ -287,7 +287,7 @@ export const approveStudent = asyncHandler(
     // Update student
     student.status = 'approved';
     student.admissionId = admissionId;
-    student.approvedBy = req.user._id;
+    student.approvedBy = req.user!._id;
     student.approvedAt = new Date();
     student.isProfileLocked = true;
     await student.save();
@@ -403,7 +403,7 @@ export const deleteStudent = asyncHandler(
  */
 export const getMyDashboard = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const student = await Student.findOne({ userId: req.user._id })
+    const student = await Student.findOne({ userId: req.user!._id })
       .populate('courseId');
 
     if (!student) {
@@ -419,7 +419,7 @@ export const getMyDashboard = asyncHandler(
 
     // Get unread notifications count
     const unreadNotifications = await Notification.countDocuments({
-      recipientId: req.user._id,
+      recipientId: req.user!._id,
       isRead: false,
     });
 

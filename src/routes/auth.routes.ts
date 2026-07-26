@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import passport from 'passport';
 import {
   register,
   login,
@@ -8,10 +9,12 @@ import {
   resetPassword,
   changePassword,
   verifyPassword,
+  googleCallback,
 } from '../controllers/auth.controller';
 import { protect } from '../middleware/auth.middleware';
 import { authLimiter } from '../middleware/rateLimiter';
 import validate from '../middleware/validate.middleware';
+import env from '../config/env';
 import {
   registerSchema,
   loginSchema,
@@ -25,6 +28,12 @@ const router = Router();
 
 router.post('/register', authLimiter, validate(registerSchema), register);
 router.post('/login', authLimiter, validate(loginSchema), login);
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+router.get(
+  '/google/callback',
+  passport.authenticate('google', { session: false, failureRedirect: `${env.FRONTEND_URL}/login?error=google` }),
+  googleCallback
+);
 router.post('/logout', protect, logout);
 router.post(
   '/forgot-password',

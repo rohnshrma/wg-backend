@@ -127,7 +127,7 @@ export const addNote = asyncHandler(
       req.params.id,
       {
         $push: {
-          notes: { text, addedBy: req.user._id, addedAt: new Date() },
+          notes: { text, addedBy: req.user!._id, addedAt: new Date() },
         },
       },
       { new: true }

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-import User from '../models/User';
+import User, { IUser } from '../models/User';
 import env from '../config/env';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
@@ -98,6 +98,10 @@ export const login = asyncHandler(
 
     if (!user.isActive) {
       throw new UnauthorizedError('Your account has been deactivated');
+    }
+
+    if (!user.password) {
+      throw new UnauthorizedError('This account uses Google Sign-In. Please continue with Google.');
     }
 
     // Check password
@@ -246,7 +250,7 @@ export const verifyPassword = asyncHandler(
   async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
     const { password } = req.body;
 
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user!._id).select('+password');
     if (!user) {
       throw new NotFoundError('User not found');
     }
@@ -272,7 +276,7 @@ export const changePassword = asyncHandler(
   async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
     const { currentPassword, newPassword } = req.body;
 
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user!._id).select('+password');
     if (!user) {
       throw new NotFoundError('User not found');
     }
@@ -294,3 +298,16 @@ export const changePassword = asyncHandler(
     });
   }
 );
+
+/**
+ * @desc    Google OAuth callback — issue our own JWT cookie and hand off to the SPA
+ * @route   GET /api/auth/google/callback
+ * @access  Public (passport middleware attaches req.user)
+ */
+export const googleCallback = (req: Request, res: Response): void => {
+  const user = req.user as IUser;
+  const token = user.generateAuthToken();
+  setAuthCookie(res, token);
+  const destination = user.role === 'admin' ? '/admin' : '/dashboard';
+  res.redirect(`${env.FRONTEND_URL}${destination}`);
+};

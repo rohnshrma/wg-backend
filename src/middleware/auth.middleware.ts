@@ -1,16 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import env from '../config/env';
-import User from '../models/User';
+import User, { IUser } from '../models/User';
 import { ForbiddenError, UnauthorizedError } from '../utils/apiError';
 
-// Extend Express Request to include user
+// Passport's own types declare `Express.Request.user?: Express.User` — augment
+// its designated extension point instead of redeclaring `user` ourselves,
+// since TS requires merged declarations of the same property to match exactly.
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace -- required TS pattern for augmenting Express's Request type
+  // eslint-disable-next-line @typescript-eslint/no-namespace -- required TS pattern for augmenting Express's types
   namespace Express {
-    interface Request {
-      user?: any;
-    }
+    // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- extension point, not meant to add members here
+    interface User extends IUser {}
   }
 }
 

@@ -27,11 +27,11 @@ router.post('/', protect, authorize('admin'), asyncHandler(async (req: Request, 
   const { images } = req.body; // array of { imageUrl, thumbnailUrl, caption, category }
 
   if (Array.isArray(images)) {
-    const docs = images.map((img: any) => ({ ...img, uploadedBy: req.user._id }));
+    const docs = images.map((img: any) => ({ ...img, uploadedBy: req.user!._id }));
     const result = await Gallery.insertMany(docs);
     sendResponse(res, { statusCode: 201, message: 'Images uploaded', data: result });
   } else {
-    const image = await Gallery.create({ ...req.body, uploadedBy: req.user._id });
+    const image = await Gallery.create({ ...req.body, uploadedBy: req.user!._id });
     sendResponse(res, { statusCode: 201, message: 'Image uploaded', data: image });
   }
 }));

@@ -42,6 +42,11 @@ const envSchema = z
     WHATSAPP_ADMIN_PHONE: z.string().default(''),
     ADMIN_WHATSAPP: z.string().default(''),
 
+    // Google OAuth
+    GOOGLE_CLIENT_ID: z.string().default(''),
+    GOOGLE_CLIENT_SECRET: z.string().default(''),
+    GOOGLE_CALLBACK_URL: z.string().default('http://localhost:5001/api/auth/google/callback'),
+
     // Site
     SITE_URL: z.string().default('http://localhost:3000'),
     FRONTEND_URL: z.string().default('http://localhost:3000'),

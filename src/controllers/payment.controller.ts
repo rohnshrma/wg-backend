@@ -11,11 +11,11 @@ import { calculateInstallments, getPagination } from '../utils/helpers';
 import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/apiError';
 
 const assertOwnsStudentRecord = async (req: Request, studentId: string): Promise<void> => {
-  if (req.user.role === 'admin') return;
+  if (req.user!.role === 'admin') return;
 
   const student = await Student.findById(studentId).select('userId');
   if (!student) throw new NotFoundError('Student not found');
-  if (student.userId.toString() !== req.user._id.toString()) {
+  if (student.userId.toString() !== req.user!._id.toString()) {
     throw new ForbiddenError('You can only view your own records');
   }
 };
@@ -222,7 +222,7 @@ export const recordPayment = asyncHandler(async (req: Request, res: Response): P
     transactionId,
     notes,
     paymentDate: paymentDate ? new Date(paymentDate) : undefined,
-    recordedBy: req.user._id,
+    recordedBy: req.user!._id,
   });
 
   const settledInstallmentIds = await applyPaymentToInstallments(
@@ -400,7 +400,7 @@ export const markInstallmentPaid = asyncHandler(async (req: Request, res: Respon
     paymentMode: 'emi',
     paymentMethod,
     transactionId,
-    recordedBy: req.user._id,
+    recordedBy: req.user!._id,
   });
 
   installment.status = 'paid';

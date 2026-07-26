@@ -7,6 +7,7 @@ import cookieParser from 'cookie-parser';
 import mongoSanitize from 'express-mongo-sanitize';
 import hpp from 'hpp';
 import env from './config/env';
+import passport from './config/passport';
 import errorHandler from './middleware/errorHandler';
 import { apiLimiter } from './middleware/rateLimiter';
 import routes from './routes';
@@ -62,6 +63,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Compression
 app.use(compression());
+
+// Google OAuth (stateless — no session store, we issue our own JWT cookie)
+app.use(passport.initialize());
 
 // Logging
 if (env.NODE_ENV === 'development') {

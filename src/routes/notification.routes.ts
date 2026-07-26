@@ -12,7 +12,7 @@ const router = Router();
 router.get('/', protect, asyncHandler(async (req: Request, res: Response) => {
   const { page, limit, skip } = getPagination(req.query.page, req.query.limit, 20);
 
-  const query = { recipientId: req.user._id };
+  const query = { recipientId: req.user!._id };
   const total = await Notification.countDocuments(query);
   const notifications = await Notification.find(query)
     .sort({ createdAt: -1 })
@@ -34,7 +34,7 @@ router.get('/', protect, asyncHandler(async (req: Request, res: Response) => {
 // Mark as read (only the recipient may mark their own notification)
 router.patch('/:id/read', protect, asyncHandler(async (req: Request, res: Response) => {
   const notification = await Notification.findOneAndUpdate(
-    { _id: req.params.id, recipientId: req.user._id },
+    { _id: req.params.id, recipientId: req.user!._id },
     { isRead: true },
     { new: true }
   );
@@ -45,7 +45,7 @@ router.patch('/:id/read', protect, asyncHandler(async (req: Request, res: Respon
 // Mark all as read
 router.patch('/read-all', protect, asyncHandler(async (req: Request, res: Response) => {
   await Notification.updateMany(
-    { recipientId: req.user._id, isRead: false },
+    { recipientId: req.user!._id, isRead: false },
     { isRead: true }
   );
   sendResponse(res, { message: 'All notifications marked as read' });

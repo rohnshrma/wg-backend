@@ -91,6 +91,26 @@
 
 ---
 
+## Checkpoint — full end-to-end test pass on production (2026-07-26)
+
+**Trigger:** after all of Phase 12's fixes, did a full click-through of the live site (`webigeeks.com`) to verify nothing was still broken, using real browser automation (not just curl) — registration, login, logout, admin panel, lead capture, session persistence.
+
+**Result: everything tested passed, no new bugs found.** Specifically verified live:
+- Public pages (Home, Courses, About, Testimonials, Gallery, Blog, Contact) all render without errors.
+- Contact page lead form: submitted a real test lead → confirmed it appeared correctly in `/admin/leads` with all fields (name, contact, course, source, status, date). This exercises the full path: frontend form → proxied API call → backend → MongoDB Atlas → admin read.
+- Student registration → auto-login → `/dashboard` redirect, sidebar nav (Overview/Profile/My Course/Payments/Notifications/Documents) all load.
+- Logout correctly clears the session; navigating back to `/dashboard` afterward correctly bounces to `/login?redirect=...` (confirms the auth-cookie fix from earlier in Phase 12 is holding up, not just working once).
+- Admin login, `/admin/leads`, `/admin/students` (shows real pre-existing student records correctly), `/admin/courses` (correctly empty).
+- All test data created during this pass (one lead, one student account) was deleted from Atlas afterward — production data untouched.
+
+**Two things flagged, explicitly NOT bugs, decision pending from the user (ask before touching):**
+1. **Courses/Gallery/Blog are empty in production** — fresh Atlas DB, nothing seeded. Testimonials already has real entries (someone added them via admin already). Backend has an existing `npm run seed:courses` script that's never been run against production. Gallery/Blog need real photos/articles from the user — not something to fabricate.
+2. **Contact form's "Course of Interest" `<select>` is `required` but fails silently on submit if left on the placeholder** — no custom error shown, relies entirely on the browser's native validation tooltip. Whether this is worth a custom-error fix, given native tooltips do work for real users, is genuinely unclear — asked the user, got interrupted mid-question, **no decision made yet**. Don't assume either way; ask first.
+
+**If resuming this exact spot from a different machine:** both repos are clean and fully pushed (`wg-backend` @ `55b2698`, `wg-frontend` @ `73b4e3f`, at time of writing) — `git pull` on both gets you current. No local-only work exists anywhere.
+
+---
+
 ## Phase 1 audit + CMS wiring — Security hardening, Testimonials/Gallery/Blog (2026-07-25)
 
 **Trigger:** continuing the roadmap in autonomous mode — picked the highest-value concrete work: audit Phases 1/4/5 (all marked NOT AUDITED) and close the previously-flagged gap where Testimonials/Gallery/Blog had full backend CRUD but zero frontend wiring (public pages hardcoded, admin pages non-functional stubs).

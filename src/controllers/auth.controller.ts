@@ -22,7 +22,7 @@ const authCookieOptions = () => ({
   // cookie must be SameSite=None (requires Secure) to be sent on the
   // cross-site fetch/XHR calls the frontend makes. Lax is fine for local
   // dev, where both run on http://localhost.
-  sameSite: (env.NODE_ENV === 'production' ? 'none' : 'lax') as const,
+  sameSite: env.NODE_ENV === 'production' ? ('none' as const) : ('lax' as const),
   maxAge: env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
   path: '/',
 });

@@ -9,6 +9,7 @@ import Installment from '../models/Installment';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
+import { notifyAdmins } from '../utils/notifyAdmins';
 import { getPagination } from '../utils/helpers';
 import {
   BadRequestError,
@@ -137,6 +138,13 @@ export const updateMyProfile = asyncHandler(
       student = await Student.create({
         userId: req.user!._id,
         ...profilePayload,
+      });
+      notifyAdmins(
+        'New Registration 🎓',
+        `${student.fullName} submitted a registration awaiting approval.`,
+        '/admin/students'
+      ).catch((error) => {
+        console.error('Failed to create admin notification for new registration:', error);
       });
     } else {
       if (student.isProfileLocked) {

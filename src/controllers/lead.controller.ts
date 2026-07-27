@@ -3,6 +3,7 @@ import Lead from '../models/Lead';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
+import { notifyAdmins } from '../utils/notifyAdmins';
 import { BadRequestError, NotFoundError } from '../utils/apiError';
 import { getPagination } from '../utils/helpers';
 
@@ -30,6 +31,9 @@ export const submitInquiry = asyncHandler(
 
     NotificationService.newLead(name, phone, email, courseInterested, lead.source).catch((error) => {
       console.error('Failed to send new-lead notification:', error);
+    });
+    notifyAdmins('New Inquiry 🔔', `${name} enquired about ${courseInterested}.`, '/admin/leads').catch((error) => {
+      console.error('Failed to create admin notification for new lead:', error);
     });
 
     sendResponse(res, {

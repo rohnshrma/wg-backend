@@ -10,6 +10,7 @@ import galleryRoutes from './gallery.routes';
 import notificationRoutes from './notification.routes';
 import analyticsRoutes from './analytics.routes';
 import uploadRoutes from './upload.routes';
+import settingsRoutes from './settings.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/gallery', galleryRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/upload', uploadRoutes);
+router.use('/settings', settingsRoutes);
 
 export default router;

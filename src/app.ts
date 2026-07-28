@@ -29,12 +29,22 @@ const allowedOrigins = [
   'http://127.0.0.1:3000',
 ].filter(Boolean);
 
+// Dev-only: the frontend's own rewrite proxy (next.config.ts) forwards the
+// browser's original Origin header straight through when it forwards a
+// request here, so testing from a phone on the same LAN (http://192.168.x.x:3000,
+// etc. — whatever address DHCP happens to hand out) hits this check too, not
+// just direct browser calls. Gated to development so it can never widen what
+// production accepts.
+const isDevLanOrigin = (origin: string): boolean =>
+  env.NODE_ENV === 'development' &&
+  /^http:\/\/(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\.[\d.]+:3000$/.test(origin);
+
 app.use(
   cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
+      if (allowedOrigins.includes(origin) || isDevLanOrigin(origin)) {
         return callback(null, true);
       }
       return callback(new Error('Not allowed by CORS'));

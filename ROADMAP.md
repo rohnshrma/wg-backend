@@ -44,10 +44,57 @@
 2. Favicon/tab-icon not visually double-checked in an actual browser chrome (only generated + spot-checked as a PNG).
 3. `npm audit` shows some high-severity advisories in transitive deps pulled in by `recharts` and `@react-three/*` — not investigated, likely fine for a training-site admin panel but worth a look before considering this production-hardened (Phase 10/11 territory).
 
+## Phase 13 — Admissions CRM + responsive overhaul (2026-07-28)
+
+**Trigger:** user asked for (1) a full responsiveness pass over the whole app and (2) a complete admissions CRM with a drag-and-drop enquiry pipeline, counsellor role, and dashboard.
+
+### The environment bug that has been wasting whole sessions — root-caused
+
+`~/Desktop` is iCloud-synced with "Optimize Mac Storage", which **evicts files inside `node_modules`** (they show as `dataless` in `ls -lO`). Node then reads a truncated/empty file and throws something that looks like a code bug but isn't. This session alone it produced, on different attempts against *identical* source: `ERR_INVALID_PACKAGE_CONFIG` on random `next` internals, `_interop_require_wildcard._ is not a function`, `Class extends value undefined` in `mongodb/gssapi.js`, `require(...) is not a function` in `morgan`/`debug`, and `mime/types.json: Unexpected end of JSON input`. Backend `node_modules` had **9,102** evicted files, frontend **28,095**.
+
+- **Diagnosis:** `ls -lRO node_modules | grep -c dataless`. Non-zero means this is biting you.
+- **Fix that works:** `rm -rf node_modules && npm ci` (writes real local files). `brctl download` did *not* materialise them, and reading files back with `cat` was far too slow (~87 files/min).
+- **A stalled `tsc` at 0% CPU for 20 minutes is this, not a slow compile.** Same for a server that starts, prints nothing, and never binds a port.
+- **Permanent fix (still not done):** move the repos off `~/Desktop`, or exclude `node_modules` from iCloud. Until then expect this to recur after the Mac is idle/low on disk.
+- Also found: `.git/objects/pack/pack-f2400f9b…pack is far too short to be a packfile` in the backend repo — same corruption, hitting git. `git log` can't traverse past `97ede80`. Harmless for commit/push, but history archaeology fails.
+
+### CRM — what was built
+
+- **Model** (`models/Enquiry.ts`): fields per the brief (name, course, education, workingStatus, mobile, email, remarks, enquiryDate, source), plus `stage`, `owner`, `createdBy`, and an embedded `stageHistory[]`. Six stages (`new_enquiry → follow_up → demo_scheduled → demo_done → admitted | cancelled`), four sources (justdial / offline_marketing / website / google_maps). Indexed on `{stage, updatedAt}`, `{owner, stage}`, `mobile`, `source`, `enquiryDate`, `createdAt`.
+- **Timeline:** every stage change — whether dragged on the board or changed via the edit form — appends `{fromStage, toStage, changedBy, changedAt, note}`. Creation seeds the first entry, so the timeline is never empty.
+- **Ownership:** one helper (`scopeToUser`) gates every read, and one (`assertCanMutate`) gates every write, so the rule can't drift per-route. Counsellors see and edit only their own enquiries; admins see everything. `role: 'student'` is hardcoded on OAuth/self-signup and `owner` is ignored from counsellor payloads — a counsellor cannot assign work to someone else or escalate.
+- **Endpoints:** `GET/POST /api/enquiries`, `GET/PUT/DELETE /api/enquiries/:id` (delete is admin-only), `PATCH /api/enquiries/:id/stage`, `GET /api/enquiries/stats`, and `GET/POST/PUT/DELETE /api/users` for staff accounts.
+- **Deleting a counsellor reassigns their enquiries to the acting admin** rather than orphaning them (`owner` is required, so orphans would fail validation later). Last-active-admin cannot be deleted, demoted, or deactivated.
+- **Duplicate guard:** a second *active* enquiry on the same mobile is rejected; once the first is `admitted`/`cancelled`, re-enquiry is allowed.
+- **Frontend:** `@dnd-kit` (not react-beautiful-dnd — that's unmaintained and doesn't support React 19). Optimistic move with a pre-mutation snapshot restored on API failure. Kanban at `/admin/crm/pipeline` and `/counsellor/pipeline`, dashboard at `/admin/crm` and `/counsellor`, staff management at `/admin/crm/users`, and a separate counsellor area with its own layout.
+- **`conversionRate` is admitted ÷ (admitted + cancelled)**, i.e. measured against *closed* enquiries. Counting still-open ones as failures would understate it badly early on.
+
+### Responsiveness
+
+- **The "pages look zoomed in on mobile" complaint was two real causes**, both fixed: no explicit `viewport` export (added to `app/layout.tsx` with `width=device-width, initialScale: 1`), and inputs under 16px, which makes **iOS Safari zoom the whole page on focus** — now forced to 16px under 640px. Pinch-zoom deliberately left enabled (`maximumScale`/`userScalable` untouched) since disabling it is an accessibility failure.
+- **The horizontal-scroll complaint was a flexbox bug:** `admin/` and `dashboard/` layouts had `flex-1` main areas with no `min-w-0`, so a wide table or the kanban forced the *whole page* sideways instead of scrolling internally. Added `min-w-0` to both (and the new counsellor layout).
+- Heading sizes were hand-tuned per page (`text-4xl` here, `text-3xl` there, some with no mobile step-down) — that inconsistency was what made pages read as differently scaled. Replaced with three `clamp()`-based classes: `.heading-hero`, `.heading-section`, `.heading-panel`.
+- `container-custom` narrowed 1400px → 1280px; at 1400 the line length was uncomfortably wide on large monitors next to the narrower pages.
+- Also: `overflow-x: hidden` guard on `html`/`body` (decorative blur orbs deliberately overflow their sections), three admin tables wrapped in `.scroll-x` with a `min-w`, four modals given `max-h-[90dvh]` + internal scroll (they ran off-screen on landscape phones), navbar drawer capped at `min(320px, 85vw)` (was a flat 300px — 20px of page left on a 320px device), navbar active-state now matches nested routes, and a 44px minimum touch target under `@media (pointer: coarse)`.
+
+### Testing — 76 tests, all passing (was 19)
+
+- **31 new backend tests** (`tests/crm.test.ts`): lifecycle, timeline attribution, validation, duplicate guard, and the full role matrix (counsellor scoping, cross-owner denial, admin-only delete, students locked out entirely, unauthenticated 401s).
+- **13 new frontend tests** (`src/__tests__/crm-pipeline.test.tsx`): all six columns render, cards land in the right column, search across name/mobile/course, stage filter + clear, detail timeline, admin-vs-counsellor delete affordance, date prefill, the exact four sources, and validation.
+- **Two pre-existing bugs found by writing these:**
+  1. `tests/cms.test.ts` asserted `401` for an authenticated-but-unauthorised student. `authorize()` was deliberately changed to `403` back in the OAuth commit (`4ce630c`) and this assertion was left stale — it had been failing ever since. Fixed the assertion, not the middleware; the 403 is correct.
+  2. **The rate limiters had no test bypass**, so a full Jest run tripped `authLimiter` (10 logins/15min, all from loopback) partway through and every subsequent request failed as unauthenticated. Added `skip: () => NODE_ENV === 'test'` to all three limiters — they stay fully active in dev and production.
+- **My own accessibility bug, caught by the tests:** every `<label>` in the CRM form and filter panel was unassociated with its control (no `htmlFor`/`id`), so screen readers announced nothing and clicking a label didn't focus the field. Fixed the components rather than loosening the tests.
+
+**Not verified this session:** no browser automation was available (the Chrome MCP server disconnected), so **the drag-and-drop gesture itself has not been exercised in a real browser** — the stage-move API it calls is covered by tests, and the board renders correctly under jsdom, but an actual pointer-drag across columns is untested. Same for the visual responsive breakpoints: the CSS/markup fixes are verified by inspection and build output, not by looking at rendered pages at each width. Worth 10 minutes with a browser.
+
+---
+
 ## Phase Status Overview
 
 | Phase | Name | Status | Notes |
 |---|---|---|---|
+| 13 | Admissions CRM + Responsive | DONE (needs browser spot-check) | Built 2026-07-28. 76 tests passing. Drag-drop gesture + visual breakpoints not browser-verified — see Phase 13 section. |
 | 1 | Authentication, Security, RBAC | AUDITED, FIXED | Audited 2026-07-25: fixed a mass-assignment vuln in `PUT /api/students/:id`, added rate limiting to change-password, removed JWT from response bodies, added zod validation to the student profile route. **2026-07-26**: fixed a cross-site auth cookie bug found in production (see Phase 12) and implemented Google OAuth 2.0 sign-in (passport-google-oauth20) — see Phase 1 section below. |
 | 2 | Public Website | SPOT-CHECKED OK, CMS WIRED | Testimonials/Gallery/Blog now read real backend data (2026-07-25) — see CMS section below. Home/Courses/About/Contact/Register still only smoke-tested (2026-07-24). |
 | 3 | Courses Module | SPOT-CHECKED OK | Admin course list (10 courses) + edit form load correctly. |

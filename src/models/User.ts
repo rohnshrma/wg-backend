@@ -8,7 +8,8 @@ export interface IUser extends Document {
   email: string;
   password?: string;
   googleId?: string;
-  role: 'student' | 'admin';
+  name?: string;
+  role: 'student' | 'admin' | 'counsellor';
   isActive: boolean;
   isEmailVerified: boolean;
   passwordResetToken?: string;
@@ -47,9 +48,13 @@ const userSchema = new Schema<IUser>(
       unique: true,
       sparse: true,
     },
+    name: {
+      type: String,
+      trim: true,
+    },
     role: {
       type: String,
-      enum: ['student', 'admin'],
+      enum: ['student', 'admin', 'counsellor'],
       default: 'student',
     },
     isActive: {

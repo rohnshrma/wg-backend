@@ -67,7 +67,10 @@ describe('Testimonials CMS', () => {
     const res = await student.post('/api/testimonials').send({
       studentName: 'x', courseName: 'x', testimonialText: 'x', rating: 5,
     });
-    expect(res.status).toBe(401);
+    // Authenticated but unauthorised is a 403, not a 401 — `authorize()` draws
+    // that distinction deliberately, because the frontend treats any 401 as
+    // "session expired" and force-redirects to /login.
+    expect(res.status).toBe(403);
   });
 });
 

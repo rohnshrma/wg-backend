@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "test": "jest --passWithNoTests",
     "lint": "eslint src/ --ext .ts",
-    "seed:courses": "ts-node src/scripts/seedCourses.ts"
+    "seed:courses": "ts-node src/scripts/seedCourses.ts",
+    "seed:testimonials": "ts-node src/scripts/seedTestimonials.ts"
   },
   "dependencies": {
     "@types/passport": "^1.0.17",

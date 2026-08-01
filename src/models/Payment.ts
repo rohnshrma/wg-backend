@@ -5,7 +5,7 @@ export interface IPayment extends Document {
   courseId: mongoose.Types.ObjectId;
   amount: number;
   paymentMode: 'full' | 'emi';
-  paymentMethod: 'cash' | 'upi' | 'bank_transfer' | 'card' | 'other';
+  paymentMethod: 'cash' | 'upi' | 'upi_autopay' | 'bank_transfer' | 'card' | 'other';
   transactionId?: string;
   receiptNumber: string;
   receiptUrl?: string;
@@ -40,7 +40,7 @@ const paymentSchema = new Schema<IPayment>(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'upi', 'bank_transfer', 'card', 'other'],
+      enum: ['cash', 'upi', 'upi_autopay', 'bank_transfer', 'card', 'other'],
       required: [true, 'Payment method is required'],
     },
     transactionId: String,

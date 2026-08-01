@@ -6,6 +6,7 @@ module.exports = {
   testMatch: ['<rootDir>/tests/**/*.test.ts'],
   testTimeout: 30000,
   clearMocks: true,
+  setupFiles: ['<rootDir>/tests/setup/env.ts'],
   transform: {
     '^.+\\.ts$': ['ts-jest', { isolatedModules: true }],
   },

@@ -319,6 +319,118 @@ export const sendCourseCompletionEmail = (
     ),
   });
 
+// 9. AutoPay — pre-debit reminder (informational, not a payment request —
+// the student already authorized recurring auto-debit at mandate setup)
+export const sendAutoDebitReminderEmail = (
+  to: string,
+  name: string,
+  amount: number,
+  dueDate: string,
+  installmentNumber: number
+) =>
+  sendEmail({
+    to,
+    subject: `🔔 Upcoming AutoPay debit — Installment #${installmentNumber} on ${dueDate}`,
+    html: baseTemplate(
+      `
+      <h2>Upcoming AutoPay Debit, ${name} 🔔</h2>
+      <p>As part of your UPI AutoPay mandate, the next installment will be automatically debited from your linked account.</p>
+      <div class="info-box">
+        <p><strong>Installment #:</strong> ${installmentNumber}</p>
+        <p><strong>Amount:</strong> ₹${amount.toLocaleString("en-IN")}</p>
+        <p><strong>Debit Date:</strong> ${dueDate}</p>
+      </div>
+      <p>No action is needed from you — please ensure sufficient balance is available in your linked account on the debit date.</p>
+      <p style="text-align: center;">
+        <a href="${env.SITE_URL || "https://webigeeks.com"}/dashboard/payments" class="btn">View Payment Schedule</a>
+      </p>
+      `,
+      "Upcoming AutoPay Debit"
+    ),
+  });
+
+// 10. AutoPay — debit succeeded
+export const sendAutoDebitSuccessEmail = (
+  to: string,
+  name: string,
+  amount: number,
+  installmentNumber: number,
+  receiptUrl?: string
+) =>
+  sendEmail({
+    to,
+    subject: `✅ AutoPay debit successful — Installment #${installmentNumber}`,
+    html: baseTemplate(
+      `
+      <h2>Payment Successful, ${name} ✅</h2>
+      <p>Your AutoPay installment was debited successfully.</p>
+      <div class="info-box">
+        <p><strong>Installment #:</strong> ${installmentNumber}</p>
+        <p><strong>Amount:</strong> ₹${amount.toLocaleString("en-IN")}</p>
+      </div>
+      ${
+        receiptUrl
+          ? `<p style="text-align: center;"><a href="${receiptUrl}" class="btn">Download Receipt</a></p>`
+          : ""
+      }
+      `,
+      "AutoPay Debit Successful"
+    ),
+  });
+
+// 11. AutoPay — debit failed (to student)
+export const sendAutoDebitFailedEmail = (
+  to: string,
+  name: string,
+  amount: number,
+  installmentNumber: number
+) =>
+  sendEmail({
+    to,
+    subject: `⚠️ AutoPay debit failed — Installment #${installmentNumber}`,
+    html: baseTemplate(
+      `
+      <h2>Payment Attempt Failed, ${name} ⚠️</h2>
+      <p>We were unable to auto-debit your installment. This can happen if there's insufficient balance or the mandate needs re-authentication.</p>
+      <div class="info-box">
+        <p><strong>Installment #:</strong> ${installmentNumber}</p>
+        <p><strong>Amount:</strong> ₹${amount.toLocaleString("en-IN")}</p>
+      </div>
+      <p>Our team will reach out to help resolve this — you can also contact us directly or make a manual payment from your dashboard.</p>
+      <p style="text-align: center;">
+        <a href="${env.SITE_URL || "https://webigeeks.com"}/dashboard/payments" class="btn btn-accent">View Payments</a>
+      </p>
+      `,
+      "AutoPay Debit Failed"
+    ),
+  });
+
+// 12. AutoPay — debit failed / mandate needs attention (to Admin)
+export const sendMandateAlertEmail = (
+  studentName: string,
+  admissionId: string | undefined,
+  reason: string
+) =>
+  sendEmail({
+    to: env.ADMIN_EMAIL || env.CONTACT_EMAIL || "webigeeksofficial@gmail.com",
+    subject: `⚠️ AutoPay mandate needs attention — ${studentName}`,
+    html: baseTemplate(
+      `
+      <h2>AutoPay Mandate Needs Follow-up ⚠️</h2>
+      <div class="info-box">
+        <p><strong>Student:</strong> ${studentName}</p>
+        ${admissionId ? `<p><strong>Admission ID:</strong> ${admissionId}</p>` : ""}
+        <p><strong>Reason:</strong> ${reason}</p>
+      </div>
+      <p>A counsellor should follow up manually to resolve this.</p>
+      <p style="text-align: center;">
+        <a href="${env.SITE_URL || "https://webigeeks.com"}/admin/payments" class="btn btn-accent">View in Dashboard</a>
+      </p>
+      `,
+      "AutoPay Mandate Alert"
+    ),
+  });
+
 // 8. General Broadcast / Announcement Email
 export const sendBroadcastEmail = (
   to: string,

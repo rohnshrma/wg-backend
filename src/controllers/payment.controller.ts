@@ -27,7 +27,7 @@ const assertOwnsStudentRecord = async (req: Request, studentId: string): Promise
  * both direct payment recording and installment settlement so the two
  * flows can't drift out of sync with each other.
  */
-const recordPaymentAndNotify = async (params: {
+export const recordPaymentAndNotify = async (params: {
   student: IStudent & { _id: any };
   courseId: any;
   amount: number;

@@ -1,6 +1,10 @@
 import Installment from '../models/Installment';
 import { NotificationService } from '../services/notificationService';
 
+// Also serves as the AutoPay pre-debit notice window. RBI's e-mandate rules
+// require pre-debit notification (commonly cited minimum ~24h); 3 days
+// comfortably clears that, but the exact current minimum wasn't re-verified
+// against live Razorpay/NPCI docs in this session — worth confirming.
 const REMINDER_WINDOW_DAYS = 3;
 
 /**
@@ -37,14 +41,30 @@ export const runInstallmentReminders = async (): Promise<void> => {
     if (!student?.email) continue;
 
     try {
-      await NotificationService.installmentReminder(
-        student.email,
-        student.studentContactNumber,
-        student.fullName,
-        installment.amount,
-        installment.dueDate.toLocaleDateString('en-IN'),
-        installment.installmentNumber
-      );
+      // AutoPay installments get an informational "this will be auto-debited"
+      // notice (RBI-mandated pre-debit notification for e-mandates) rather
+      // than the manual-plan "please make a payment" copy — the student
+      // already authorized the recurring debit at mandate setup, so asking
+      // them to pay would be confusing and wrong.
+      if (installment.collectionMethod === 'autopay') {
+        await NotificationService.autoDebitReminder(
+          student.email,
+          student.studentContactNumber,
+          student.fullName,
+          installment.amount,
+          installment.dueDate.toLocaleDateString('en-IN'),
+          installment.installmentNumber
+        );
+      } else {
+        await NotificationService.installmentReminder(
+          student.email,
+          student.studentContactNumber,
+          student.fullName,
+          installment.amount,
+          installment.dueDate.toLocaleDateString('en-IN'),
+          installment.installmentNumber
+        );
+      }
       installment.reminderSent = true;
       installment.reminderSentAt = now;
       await installment.save();

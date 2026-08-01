@@ -67,8 +67,18 @@ app.use(mongoSanitize());
 // Prevent HTTP parameter pollution
 app.use(hpp());
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
+// Body parsing. Captures the raw bytes alongside the parsed JSON body so the
+// Razorpay webhook handler can verify the HMAC signature against the exact
+// bytes Razorpay signed — re-serializing req.body would not byte-for-byte
+// match what was signed (key order, whitespace) and would fail verification.
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Compression

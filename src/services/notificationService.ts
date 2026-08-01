@@ -8,6 +8,7 @@ import {
   sendInstallmentReminderWhatsApp,
   sendLeadFollowUpWhatsApp,
   sendNewLeadWhatsAppToAdmin,
+  sendWhatsAppText,
 } from "./whatsappService";
 import {
   sendWelcomeEmail,
@@ -19,6 +20,10 @@ import {
   sendNewLeadNotification,
   sendInstallmentReminderEmail,
   sendCourseCompletionEmail,
+  sendAutoDebitReminderEmail,
+  sendAutoDebitSuccessEmail,
+  sendAutoDebitFailedEmail,
+  sendMandateAlertEmail,
 } from "./emailService";
 
 /**
@@ -133,5 +138,77 @@ export const NotificationService = {
   async broadcast(emails: string[], subject: string, message: string) {
     const promises = emails.map((email) => sendBroadcastEmail(email, subject, message));
     await Promise.allSettled(promises);
+  },
+
+  // AutoPay — pre-debit reminder (informational; student already authorized
+  // recurring auto-debit, this isn't a request to pay manually)
+  async autoDebitReminder(
+    email: string,
+    phone: string,
+    name: string,
+    amount: number,
+    dueDate: string,
+    installmentNumber: number
+  ) {
+    const tasks = [sendAutoDebitReminderEmail(email, name, amount, dueDate, installmentNumber)];
+    if (phone) {
+      tasks.push(
+        sendWhatsAppText(
+          phone,
+          `Hi ${name}, your AutoPay installment #${installmentNumber} of ₹${amount.toLocaleString("en-IN")} will be auto-debited on ${dueDate}. No action needed — just ensure sufficient balance is available.`
+        )
+      );
+    }
+    await Promise.allSettled(tasks);
+  },
+
+  // AutoPay — debit succeeded
+  async autoDebitSuccess(
+    email: string,
+    phone: string,
+    name: string,
+    amount: number,
+    installmentNumber: number,
+    receiptUrl?: string
+  ) {
+    const tasks = [sendAutoDebitSuccessEmail(email, name, amount, installmentNumber, receiptUrl)];
+    if (phone) {
+      tasks.push(
+        sendWhatsAppText(
+          phone,
+          `Hi ${name}, your AutoPay installment #${installmentNumber} of ₹${amount.toLocaleString("en-IN")} was debited successfully.${receiptUrl ? ` Receipt: ${receiptUrl}` : ""}`
+        )
+      );
+    }
+    await Promise.allSettled(tasks);
+  },
+
+  // AutoPay — debit failed (student + admin alert)
+  async autoDebitFailed(
+    email: string,
+    phone: string,
+    name: string,
+    admissionId: string | undefined,
+    amount: number,
+    installmentNumber: number
+  ) {
+    const tasks = [
+      sendAutoDebitFailedEmail(email, name, amount, installmentNumber),
+      sendMandateAlertEmail(name, admissionId, `Installment #${installmentNumber} auto-debit failed`),
+    ];
+    if (phone) {
+      tasks.push(
+        sendWhatsAppText(
+          phone,
+          `Hi ${name}, we couldn't auto-debit your AutoPay installment #${installmentNumber} of ₹${amount.toLocaleString("en-IN")}. Our team will reach out — you can also pay manually from your dashboard.`
+        )
+      );
+    }
+    await Promise.allSettled(tasks);
+  },
+
+  // AutoPay — mandate needs manual follow-up (halted/cancelled)
+  async mandateNeedsAttention(studentName: string, admissionId: string | undefined, reason: string) {
+    await sendMandateAlertEmail(studentName, admissionId, reason);
   },
 };

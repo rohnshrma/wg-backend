@@ -13,6 +13,7 @@ import uploadRoutes from './upload.routes';
 import settingsRoutes from './settings.routes';
 import enquiryRoutes from './enquiry.routes';
 import userRoutes from './user.routes';
+import webhookRoutes from './webhook.routes';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/upload', uploadRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/enquiries', enquiryRoutes);
 router.use('/users', userRoutes);
+router.use('/webhooks', webhookRoutes);
 
 export default router;

@@ -35,6 +35,13 @@ const envSchema = z
     FROM_NAME: z.string().default('WebiGeeks'),
     FROM_EMAIL: z.string().default(''),
 
+    // Razorpay (Subscriptions / UPI AutoPay e-mandate) — optional, same
+    // graceful-degradation pattern as Cloudinary: absent in dev is fine,
+    // mandate-creation routes 503 until real keys are set.
+    RAZORPAY_KEY_ID: z.string().default(''),
+    RAZORPAY_KEY_SECRET: z.string().default(''),
+    RAZORPAY_WEBHOOK_SECRET: z.string().default(''),
+
     // WhatsApp
     WHATSAPP_PHONE_NUMBER_ID: z.string().default(''),
     WHATSAPP_ACCESS_TOKEN: z.string().default(''),

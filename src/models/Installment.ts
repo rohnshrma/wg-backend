@@ -10,6 +10,18 @@ export interface IInstallment extends Document {
   paidDate?: Date;
   reminderSent: boolean;
   reminderSentAt?: Date;
+  // UPI AutoPay e-mandate fields. `status`/`paidDate` stay the single
+  // source of truth for "is this settled" (existing code — payment
+  // application, admin UI, the reminders job — already keys off them);
+  // these fields only add how/whether an auto-debit was involved, so a
+  // failed autopay attempt doesn't invent a 4th `status` value that every
+  // consumer above would need to learn about.
+  mandateId?: mongoose.Types.ObjectId;
+  collectionMethod: 'manual' | 'autopay';
+  razorpayPaymentId?: string;
+  receiptUrl?: string;
+  autoDebitFailedAt?: Date;
+  autoDebitFailureReason?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,6 +62,23 @@ const installmentSchema = new Schema<IInstallment>(
       default: false,
     },
     reminderSentAt: Date,
+    mandateId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Mandate',
+    },
+    collectionMethod: {
+      type: String,
+      enum: ['manual', 'autopay'],
+      default: 'manual',
+    },
+    razorpayPaymentId: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    receiptUrl: String,
+    autoDebitFailedAt: Date,
+    autoDebitFailureReason: String,
   },
   {
     timestamps: true,
@@ -58,6 +87,7 @@ const installmentSchema = new Schema<IInstallment>(
 
 installmentSchema.index({ studentId: 1 });
 installmentSchema.index({ dueDate: 1, status: 1 });
+installmentSchema.index({ mandateId: 1 });
 
 const Installment = mongoose.model<IInstallment>('Installment', installmentSchema);
 export default Installment;

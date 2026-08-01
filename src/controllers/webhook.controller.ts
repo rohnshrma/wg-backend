@@ -166,8 +166,10 @@ export const handleRazorpayWebhook = asyncHandler(async (req: Request, res: Resp
 
   const bodyHash = crypto.createHash('sha256').update(rawBody).digest('hex');
 
+  let dedupeEventId: unknown;
   try {
-    await RazorpayWebhookEvent.create({ bodyHash, event: req.body.event });
+    const dedupeEvent = await RazorpayWebhookEvent.create({ bodyHash, event: req.body.event });
+    dedupeEventId = dedupeEvent._id;
   } catch (error: any) {
     if (error?.code === 11000) {
       // Already processed this exact delivery — ack without reprocessing.
@@ -179,26 +181,41 @@ export const handleRazorpayWebhook = asyncHandler(async (req: Request, res: Resp
 
   const body = req.body as WebhookPayload;
 
-  switch (body.event) {
-    case 'subscription.authenticated':
-    case 'subscription.activated':
-      await handleSubscriptionAuthenticated(body);
-      break;
-    case 'subscription.charged':
-      await handleSubscriptionCharged(body);
-      break;
-    case 'subscription.pending':
-    case 'payment.failed':
-      await handlePaymentFailedOrPending(body);
-      break;
-    case 'subscription.halted':
-      await handleSubscriptionHaltedOrCancelled(body, 'paused');
-      break;
-    case 'subscription.cancelled':
-      await handleSubscriptionHaltedOrCancelled(body, 'cancelled');
-      break;
-    default:
-      console.log(`[webhook] unhandled event: ${body.event}`);
+  // The dedupe row above is inserted before processing so two concurrent
+  // deliveries of the same payload can't both process it. But that means a
+  // failure *during* processing (e.g. a bad downstream record) would
+  // otherwise leave this delivery permanently marked "handled" — Razorpay's
+  // automatic retry would just be silently swallowed by the dedupe check
+  // above, and the event (a real charge that happened) would never actually
+  // get applied. Roll the dedupe row back on failure so a retry can
+  // reprocess it, and respond with an error so Razorpay knows to retry.
+  try {
+    switch (body.event) {
+      case 'subscription.authenticated':
+      case 'subscription.activated':
+        await handleSubscriptionAuthenticated(body);
+        break;
+      case 'subscription.charged':
+        await handleSubscriptionCharged(body);
+        break;
+      case 'subscription.pending':
+      case 'payment.failed':
+        await handlePaymentFailedOrPending(body);
+        break;
+      case 'subscription.halted':
+        await handleSubscriptionHaltedOrCancelled(body, 'paused');
+        break;
+      case 'subscription.cancelled':
+        await handleSubscriptionHaltedOrCancelled(body, 'cancelled');
+        break;
+      default:
+        console.log(`[webhook] unhandled event: ${body.event}`);
+    }
+  } catch (error) {
+    await RazorpayWebhookEvent.deleteOne({ _id: dedupeEventId });
+    console.error(`[webhook] processing ${body.event} failed, dedupe rolled back for retry:`, error);
+    res.status(500).json({ success: false, message: 'Webhook processing failed' });
+    return;
   }
 
   res.status(200).json({ success: true });

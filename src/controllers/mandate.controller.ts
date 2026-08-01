@@ -23,26 +23,19 @@ const cycleLengthDays = (period: 'daily' | 'weekly' | 'monthly', interval: numbe
   return days * interval;
 };
 
-// Business default: unless the admin picks a specific date, AutoPay
-// installments bill on this fixed day every month rather than drifting to
-// whatever day the student happens to finish UPI authentication — otherwise
-// a student can quietly push their own due date out just by delaying
-// authorization.
-const DEFAULT_MONTHLY_BILLING_DAY = 3;
-
 // Razorpay needs runway between mandate creation and the first charge for
 // the student to actually complete UPI authentication — too tight a window
 // risks the first cycle firing (and failing) before they've authorized.
 const MIN_AUTH_LEAD_DAYS = 2;
 
-const nextMonthlyBillingDate = (day: number, minLeadDays: number, from: Date): Date => {
-  const candidate = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), day));
-  const minDate = new Date(from.getTime() + minLeadDays * 24 * 60 * 60 * 1000);
-  if (candidate < minDate) {
-    candidate.setUTCMonth(candidate.getUTCMonth() + 1);
-  }
-  return candidate;
-};
+// Business rule: the student must complete UPI authentication the same day
+// as admission, or within 24h at the latest — enforced via Razorpay's own
+// expire_by (the subscription becomes unauthorizable after this), not just
+// a UI reminder. Without this, an unauthorized mandate link stays valid
+// indefinitely, and whenever the student eventually authorizes becomes
+// their (arbitrarily delayed) first debit date, undermining the fixed
+// cadence entirely.
+const MANDATE_AUTH_EXPIRY_HOURS = 24;
 
 /**
  * @desc    Create a Razorpay Subscription (UPI AutoPay e-mandate) covering
@@ -88,7 +81,13 @@ export const createMandate = asyncHandler(async (req: Request, res: Response): P
   }
   const amountPerInstallment = student.pendingAmount / numberOfInstallments;
 
-  let firstDueDate: Date;
+  // Default: no explicit start date — first installment auto-debits
+  // immediately as part of UPI authentication itself (Razorpay's native
+  // behavior, verified), and each subsequent cycle follows at a fixed
+  // interval from there (30 days for "monthly" — see razorpayService).
+  // An explicit startDate is still honored for the rare admin-scheduled
+  // case, requiring enough runway for the student to authenticate first.
+  let firstDueDate: Date | undefined;
   if (startDate) {
     firstDueDate = new Date(startDate);
     const minDate = new Date(Date.now() + MIN_AUTH_LEAD_DAYS * 24 * 60 * 60 * 1000);
@@ -97,17 +96,14 @@ export const createMandate = asyncHandler(async (req: Request, res: Response): P
         `startDate must be at least ${MIN_AUTH_LEAD_DAYS} days out, to give the student time to complete UPI authentication before the first charge.`
       );
     }
-  } else if (period === 'monthly') {
-    firstDueDate = nextMonthlyBillingDate(DEFAULT_MONTHLY_BILLING_DAY, MIN_AUTH_LEAD_DAYS, new Date());
-  } else {
-    firstDueDate = new Date();
   }
-  // Only pin start_at when we have a real fixed anchor (explicit startDate,
-  // or the default monthly billing day) — for an unspecified daily/weekly
-  // plan, firstDueDate is just "now" and passing that as start_at isn't far
-  // enough in the future for Razorpay to accept, so let it default to
-  // starting right after authentication instead.
-  const hasFixedAnchor = Boolean(startDate) || period === 'monthly';
+
+  // expire_by: if a future startDate was given, authentication must happen
+  // before that scheduled first charge; otherwise the student has the
+  // standard 24h window from mandate creation (right at admission).
+  const expireBy = firstDueDate
+    ? Math.floor(firstDueDate.getTime() / 1000)
+    : Math.floor((Date.now() + MANDATE_AUTH_EXPIRY_HOURS * 60 * 60 * 1000) / 1000);
 
   const { planId, subscriptionId, shortUrl } = await createSubscriptionMandate({
     amount: amountPerInstallment,
@@ -119,7 +115,8 @@ export const createMandate = asyncHandler(async (req: Request, res: Response): P
       studentId: student._id.toString(),
       admissionId: student.admissionId || '',
     },
-    startAt: hasFixedAnchor ? Math.floor(firstDueDate.getTime() / 1000) : undefined,
+    startAt: firstDueDate ? Math.floor(firstDueDate.getTime() / 1000) : undefined,
+    expireBy,
   });
 
   const ip =
@@ -143,13 +140,17 @@ export const createMandate = asyncHandler(async (req: Request, res: Response): P
   });
 
   const cycleDays = cycleLengthDays(period, interval);
+  // Local due-date display: if no startDate was given, installment #1 is
+  // "now" — matching Razorpay's immediate first-debit-on-authentication
+  // behavior — with each later cycle cycleDays after that.
+  const scheduleAnchor = firstDueDate ?? new Date();
 
   const installments = await Installment.insertMany(
     Array.from({ length: numberOfInstallments }, (_, i) => ({
       studentId: student._id,
       installmentNumber: i + 1,
       amount: amountPerInstallment,
-      dueDate: new Date(firstDueDate.getTime() + i * cycleDays * 24 * 60 * 60 * 1000),
+      dueDate: new Date(scheduleAnchor.getTime() + i * cycleDays * 24 * 60 * 60 * 1000),
       status: 'pending',
       mandateId: mandate._id,
       collectionMethod: 'autopay',

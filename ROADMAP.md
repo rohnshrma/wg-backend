@@ -194,13 +194,41 @@
 
 **Meta-lesson:** the desktop-browser automated spot-check earlier in this file found real things, but real-device testing found four *more* bugs that automation structurally cannot reproduce — dynamic mobile address-bar behavior, on-screen keyboard viewport changes, and genuine touch input. If a future session has access to a real phone (or even just resizing a real browser's viewport and toggling its own chrome), treat that as a distinct, necessary testing pass — not a redundant one — before calling any mobile-facing UI done.
 
+### Sticky sidebars/headers were broken app-wide by one CSS rule (2026-07-29, FIXED + BROWSER-VERIFIED)
+
+**Trigger:** user reported that on the admin dashboard the sidebar scrolls up with the page instead of staying put.
+
+**Root cause: `body { overflow-x: hidden }` in `globals.css`.** `overflow-x: hidden` makes the element a scroll container in *both* axes (per spec, the other axis's `visible` computes to `auto`). Every `position: sticky` descendant then resolves against the **body's** scrollport instead of the viewport — and the body's scrollport never scrolls, the viewport does — so the sticky element just scrolls away with the content. This silently disabled sticky positioning across the whole app: the `lg:sticky` sidebar **and** the `sticky top-0` header in all three role layouts (`admin/`, `dashboard/`, `counsellor/`).
+
+- **Fix: `overflow-x: clip` instead.** `clip` does identical clipping but does *not* create a scroll container, so sticky keeps working. One line, in `body` only.
+- **`html`'s `overflow-x: hidden` was NOT the culprit and is deliberately left alone** — the UA propagates root-element overflow to the viewport and the used value on the element itself becomes `visible`. That also means the original anti-horizontal-scroll guard still holds in browsers too old for `overflow: clip` (Safari <16); the `body` rule was always belt-and-braces on top of the `html` one.
+- **If a `position: sticky` element ever "just doesn't stick" again, check every ancestor for `overflow: hidden/auto/scroll` first** — the property that breaks it is usually nowhere near the element that looks broken.
+
+**Verified in a real browser, with a control.** No browser MCP was connected this session, so one was wired up ad hoc: `puppeteer-core` driving the installed system Chrome (`/Applications/Google Chrome.app`) headless against the real running app — real admin login, real `/admin/analytics` page, real scroll to y=900 at 1280×800. Measured `getBoundingClientRect().top` on the `<aside>` and `<header>` before and after scrolling:
+
+| | at top | scrolled to y=900 |
+|---|---|---|
+| with fix (`clip`) | aside 0, header 0 | aside **0**, header **0** — pinned |
+| control (`hidden` re-injected live) | aside 0, header 0 | aside **-900**, header **-900** — scrolled off |
+
+The control leg matters: re-injecting the old rule into the same live page reproduced the reported bug exactly, which is what makes the pass meaningful rather than just "looks fine". **This pattern — measure, then re-inject the old rule and prove the measurement catches it — is worth reusing for any future CSS fix.** `puppeteer-core` + system Chrome needs no Chromium download and is a fine stand-in when the browser MCP is unavailable.
+
+### FOOTGUN: a local production-mode build talks to the PRODUCTION backend (found 2026-07-29, NOT fixed)
+
+Found while setting up the browser test above. `next.config.ts` does `const BACKEND_URL = process.env.BACKEND_URL || "https://wg-backend-dgtd.onrender.com"`, and `BACKEND_URL` is not set anywhere locally — so `npm run build && npm start` on this machine proxies `/api/*` **straight to the live Render backend and Atlas database**. An admin session on `localhost:3000` is editing production data, with nothing in the UI to indicate it.
+
+- **Rewrites are baked into `.next/routes-manifest.json` at BUILD time**, not read at runtime — setting `BACKEND_URL` before `npm start` does nothing. It must be set for `npm run build`. (Cost a confused debugging cycle: the runtime env var appeared to be ignored, because it was.)
+- To run fully locally: `BACKEND_URL=http://localhost:5001 npm run build && npm start`. Confirm with `grep -o "onrender[^\"]*\|localhost:5001[^\"]*" .next/routes-manifest.json`.
+- **Suggested fix, not applied (user hasn't decided):** default to `http://localhost:5001` when `NODE_ENV !== 'production'` so the production URL is opt-in rather than the default.
+- Incident note: one admin login attempt did reach production this way before it was noticed. It failed with 401 (production's admin password is not the local `Admin@123`) — nothing read or changed, one slot of the production auth rate limit consumed.
+
 ---
 
 ## Phase Status Overview
 
 | Phase | Name | Status | Notes |
 |---|---|---|---|
-| 13 | Admissions CRM + Responsive | DONE, REAL-PHONE VERIFIED | Built 2026-07-28. 76 tests passing. Browser-automation spot-check, then a real-phone round found 4 more bugs invisible to any browser automation: CORS-vs-LAN, vh→dvh→svh modal saga, mobile sidebar cut off (h-screen→h-svh) + missing body-scroll-lock — see Phase 13 sections. Pipeline is now a vertical stack below `lg` (was always horizontal). **Open:** user hasn't yet confirmed autoScroll acceleration:120 (10x) actually feels right. Found (unfixed): `config/passport.ts` crashes backend startup when Google OAuth env vars are unset. |
+| 13 | Admissions CRM + Responsive | DONE, REAL-PHONE VERIFIED | Built 2026-07-28. 76 tests passing. Browser-automation spot-check, then a real-phone round found 4 more bugs invisible to any browser automation: CORS-vs-LAN, vh→dvh→svh modal saga, mobile sidebar cut off (h-screen→h-svh) + missing body-scroll-lock — see Phase 13 sections. Pipeline is now a vertical stack below `lg` (was always horizontal). **2026-07-29:** sticky sidebars/headers were broken app-wide by `body { overflow-x: hidden }` — fixed to `overflow-x: clip`, verified in a real browser with a control. **Open:** user hasn't yet confirmed autoScroll acceleration:120 (10x) actually feels right. Found (unfixed): `config/passport.ts` crashes backend startup when Google OAuth env vars are unset; a local prod-mode build silently proxies to the *production* backend (see footgun section). |
 | 1 | Authentication, Security, RBAC | AUDITED, FIXED | Audited 2026-07-25: fixed a mass-assignment vuln in `PUT /api/students/:id`, added rate limiting to change-password, removed JWT from response bodies, added zod validation to the student profile route. **2026-07-26**: fixed a cross-site auth cookie bug found in production (see Phase 12) and implemented Google OAuth 2.0 sign-in (passport-google-oauth20) — see Phase 1 section below. |
 | 2 | Public Website | SPOT-CHECKED OK, CMS WIRED | Testimonials/Gallery/Blog now read real backend data (2026-07-25) — see CMS section below. Home/Courses/About/Contact/Register still only smoke-tested (2026-07-24). |
 | 3 | Courses Module | SPOT-CHECKED OK | Admin course list (10 courses) + edit form load correctly. |

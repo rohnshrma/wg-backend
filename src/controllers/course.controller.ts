@@ -27,7 +27,7 @@ export const getAllCourses = asyncHandler(
     }
 
     const courses = await Course.find(query)
-      .select('title slug shortDescription thumbnailUrl duration mode level fees isFeatured technologies displayOrder')
+      .select('title slug shortDescription thumbnailUrl duration mode level fees isFeatured technologies displayOrder createdAt updatedAt')
       .sort({ displayOrder: 1, createdAt: -1 });
 
     sendResponse(res, {

@@ -19,64 +19,70 @@ import mongoose from 'mongoose';
 import env from '../config/env';
 import Course from '../models/Course';
 
+// No trailing "— WebiGeeks" on any of these — courses/[slug]/page.tsx's
+// generateMetadata sets `title: course.metaTitle`, which flows through the
+// root layout's `%s | WebiGeeks Gurugram` template. Including the brand name
+// here too produced a duplicated "...— WebiGeeks | WebiGeeks Gurugram" tail,
+// caught via live curl verification against the /mern-course-gurugram page
+// before this script was ever run against production.
 const seoCopy: Record<string, { metaTitle: string; metaDescription: string }> = {
   'mern-stack-development': {
-    metaTitle: 'MERN Stack Course in Gurugram | Full Stack Training — WebiGeeks',
+    metaTitle: 'MERN Stack Course in Gurugram | Full Stack Training',
     metaDescription:
       '7-month offline/online MERN Stack course in Sector-14, Gurugram. React, Node, MongoDB, 10+ live projects, 100% placement support. Batches of 15.',
   },
   'python-programming': {
-    metaTitle: 'Python Course in Gurugram | Beginner to Advanced — WebiGeeks',
+    metaTitle: 'Python Course in Gurugram | Beginner to Advanced',
     metaDescription:
       'Learn Python from scratch in Gurugram — OOP, Flask/Django, 3 milestone projects. Offline classes in Sector-14 or online, with placement assistance.',
   },
   'data-analytics': {
-    metaTitle: 'Data Analytics Course in Gurugram | Excel to Power BI — WebiGeeks',
+    metaTitle: 'Data Analytics Course in Gurugram | Excel to Power BI',
     metaDescription:
       'Data Analytics training in Gurugram: Excel, SQL, Python, Power BI & Tableau. 6-7 month offline/online programme with real business projects.',
   },
   'power-bi': {
-    metaTitle: 'Power BI Training in Gurgaon | Dashboards & DAX — WebiGeeks',
+    metaTitle: 'Power BI Training in Gurgaon | Dashboards & DAX',
     metaDescription:
       '2-month Power BI course in Gurugram — DAX, data modeling, real dashboards, certification. Offline classes at our Sector-14 campus or online.',
   },
   'data-science': {
-    metaTitle: 'Data Science Course in Gurugram | ML & Deep Learning — WebiGeeks',
+    metaTitle: 'Data Science Course in Gurugram | ML & Deep Learning',
     metaDescription:
       '4-month Data Science programme in Gurugram covering Python, ML, Deep Learning, NLP and GenAI, with production model deployment.',
   },
   'artificial-intelligence': {
-    metaTitle: 'AI Course in Gurugram | Neural Networks to GenAI — WebiGeeks',
+    metaTitle: 'AI Course in Gurugram | Neural Networks to GenAI',
     metaDescription:
       'Advanced Artificial Intelligence training in Gurugram — Computer Vision, NLP, Transformers, Generative AI. 5-month hybrid programme.',
   },
   'java-programming': {
-    metaTitle: 'Java Course in Gurugram | OOP to Spring Boot — WebiGeeks',
+    metaTitle: 'Java Course in Gurugram | OOP to Spring Boot',
     metaDescription:
       '3-month offline Java programming course in Gurugram — OOP, Collections, JDBC, intro to Spring Boot. Interview-ready curriculum.',
   },
   'c-cpp-programming': {
-    metaTitle: 'C / C++ Course in Gurugram | DSA Foundations — WebiGeeks',
+    metaTitle: 'C / C++ Course in Gurugram | DSA Foundations',
     metaDescription:
       '2-month offline C/C++ classes in Gurugram building strong pointer, memory-management and DSA fundamentals for competitive coding.',
   },
   sql: {
-    metaTitle: 'SQL Course in Gurugram | Joins to Window Functions — WebiGeeks',
+    metaTitle: 'SQL Course in Gurugram | Joins to Window Functions',
     metaDescription:
       '6-week SQL training in Gurugram — joins, subqueries, window functions, CTEs. 100+ practice problems on real databases.',
   },
   'ms-excel': {
-    metaTitle: 'MS Excel Course in Gurugram | Business Analysis — WebiGeeks',
+    metaTitle: 'MS Excel Course in Gurugram | Business Analysis',
     metaDescription:
       '4-week Excel training in Gurugram — advanced formulas, PivotTables, macros and VBA for business and data roles.',
   },
   'react-js': {
-    metaTitle: 'React JS Course in Gurugram | Modern Frontend — WebiGeeks',
+    metaTitle: 'React JS Course in Gurugram | Modern Frontend',
     metaDescription:
       'Hands-on React.js training in Gurugram — hooks, Redux Toolkit, routing and real project builds. Offline and online batches.',
   },
   typescript: {
-    metaTitle: 'TypeScript Course in Gurugram | Type-Safe JavaScript — WebiGeeks',
+    metaTitle: 'TypeScript Course in Gurugram | Type-Safe JavaScript',
     metaDescription:
       'TypeScript training in Gurugram for JS developers — generics, interfaces, React & Node integration. Small offline batches.',
   },

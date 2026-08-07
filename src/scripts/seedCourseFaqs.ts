@@ -52,7 +52,7 @@ function buildFaqs(course: {
       answer:
         course.level === 'beginner'
           ? `No — the ${course.title} course is designed for beginners with no prior experience required.`
-          : `The ${course.title} course is a ${course.level}-level course — some prior background is expected before joining.`,
+          : `The ${course.title} course is ${/^[aeiou]/i.test(course.level) ? 'an' : 'a'} ${course.level}-level course — some prior background is expected before joining.`,
     },
   ];
 }

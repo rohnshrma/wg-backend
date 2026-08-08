@@ -176,6 +176,7 @@ async function seed() {
           courseName: t.courseName,
           testimonialText: t.testimonialText,
           rating: t.rating,
+          source: 'google',
           isActive: true,
           displayOrder: index,
         },

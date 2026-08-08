@@ -10,6 +10,7 @@ export interface ITestimonial extends Document {
   videoUrl?: string;
   testimonialText: string;
   rating: number;
+  source: 'google' | 'manual';
   isActive: boolean;
   displayOrder: number;
   createdAt: Date;
@@ -43,6 +44,7 @@ const testimonialSchema = new Schema<ITestimonial>(
       min: 1,
       max: 5,
     },
+    source: { type: String, enum: ['google', 'manual'], default: 'manual' },
     isActive: { type: Boolean, default: true },
     displayOrder: { type: Number, default: 0 },
   },

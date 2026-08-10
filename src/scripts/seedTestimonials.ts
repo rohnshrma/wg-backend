@@ -11,6 +11,13 @@
  * end. Four reviews with no actual review text (just a reviewer name and
  * review count) and the business owner's own reply ("Thanx") were excluded
  * entirely — there's no real testimonial content to seed for those.
+ *
+ * 2026-08-10 update: appended a second batch (Dev Thakran through Shanu
+ * Thakur below) from a fresh set of Google reviews the user supplied. Same
+ * rules applied — "kashish Kumar Verma" had no review text and was
+ * excluded, a few entries were trimmed at Google's "…More" cutoff, and
+ * obvious typos (e.g. "WEEBIGEEK" -> "WebiGeeks") were lightly corrected
+ * without changing the substance of what was written.
  */
 import mongoose from 'mongoose';
 import env from '../config/env';
@@ -159,6 +166,59 @@ const testimonials: SeedTestimonial[] = [
     studentName: 'Subham Sharma',
     courseName: GENERIC_COURSE,
     testimonialText: 'This is the best place to learn any coding language.',
+    rating: 5,
+  },
+  {
+    studentName: 'Dev Thakran',
+    courseName: 'Python Programming',
+    testimonialText:
+      "I'm currently learning Python through WebiGeeks, and my experience so far has been really positive. Till now, everything I've studied has been explained in a very clear and easy-to-understand way.",
+    rating: 5,
+  },
+  {
+    studentName: 'Aryan Saini',
+    courseName: GENERIC_COURSE,
+    testimonialText: 'The vibe is pretty chill, and the teachers are friendly and supportive.',
+    rating: 5,
+  },
+  {
+    studentName: 'Dhrona Blaggan',
+    courseName: 'Full Stack Development',
+    testimonialText:
+      'I did my Python course and am currently doing the Full Stack Development course in Gurugram from WebiGeeks. Rohan Sir explains concepts really well and makes sure everyone understands before moving ahead.',
+    rating: 5,
+  },
+  {
+    studentName: 'Vinay Kumar Maurya',
+    courseName: GENERIC_COURSE,
+    testimonialText:
+      'It was a great learning experience with such a great and friendly mentor, which made learning more interesting and effective. Every concept was explained clearly with real-life day-to-day examples. Thanks WebiGeeks, for guiding and helping me with my first coding language.',
+    rating: 5,
+  },
+  {
+    studentName: 'Kanika Tyagi',
+    courseName: GENERIC_COURSE,
+    testimonialText: 'Great teacher, practical learning, real-life projects, and doubt sessions.',
+    rating: 5,
+  },
+  {
+    studentName: 'sandeep singh',
+    courseName: 'Data Analytics with Python',
+    testimonialText:
+      'A great learning experience in the Data Analyst course at WebiGeeks under the guidance of Rohan Sir. His teaching style is clear, structured, and very easy to understand, even for beginners.',
+    rating: 5,
+  },
+  {
+    studentName: 'Tanisha Solanki',
+    courseName: GENERIC_COURSE,
+    testimonialText: 'Excellent teaching skills.',
+    rating: 5,
+  },
+  {
+    studentName: 'Shanu Thakur',
+    courseName: GENERIC_COURSE,
+    testimonialText:
+      "Joining WebiGeeks center was one of the best decisions I've made. The faculty is extremely knowledgeable, approachable, and always willing to clear doubts. The study material is well-structured, making complex topics easy to understand.",
     rating: 5,
   },
 ];

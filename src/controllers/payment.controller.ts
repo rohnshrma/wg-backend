@@ -326,13 +326,25 @@ export const getInstallments = asyncHandler(async (req: Request, res: Response):
  * @access  Admin
  */
 export const generateInstallmentPlan = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const { numberOfInstallments, startDate, intervalDays } = req.body;
+  const {
+    numberOfInstallments,
+    startDate,
+    intervalDays,
+    // Covers the common "admission fee paid up front" case: the student
+    // just handed over a specific amount (not necessarily an equal share)
+    // as installment #1, right now. The rest of the balance still splits
+    // evenly across the remaining installments.
+    firstInstallmentAmount,
+    firstInstallmentPaid,
+    paymentMethod,
+    transactionId,
+  } = req.body;
 
   if (!numberOfInstallments || numberOfInstallments < 1) {
     throw new BadRequestError('numberOfInstallments must be at least 1');
   }
 
-  const student = await Student.findById(req.params.id);
+  const student = await Student.findById(req.params.id).populate('courseId', 'title');
   if (!student) throw new NotFoundError('Student not found');
 
   const existing = await Installment.countDocuments({ studentId: student._id });
@@ -344,19 +356,93 @@ export const generateInstallmentPlan = asyncHandler(async (req: Request, res: Re
     throw new BadRequestError('Student has no pending balance to schedule');
   }
 
-  const amounts = calculateInstallments(student.pendingAmount, numberOfInstallments);
   const firstDueDate = startDate ? new Date(startDate) : new Date();
   const interval = intervalDays || 30;
+  const hasCustomFirst = firstInstallmentAmount !== undefined && firstInstallmentAmount !== null;
 
-  const installments = await Installment.insertMany(
-    amounts.map((amount, i) => ({
+  let installmentsToInsert: Array<{
+    studentId: any;
+    installmentNumber: number;
+    amount: number;
+    dueDate: Date;
+    status: 'pending' | 'paid';
+    paidDate?: Date;
+    paymentId?: any;
+  }>;
+
+  if (hasCustomFirst) {
+    if (firstInstallmentAmount <= 0 || firstInstallmentAmount > student.pendingAmount) {
+      throw new BadRequestError(
+        `First installment amount must be between ₹1 and the pending balance of ₹${student.pendingAmount.toLocaleString('en-IN')}`
+      );
+    }
+
+    const remainingCount = numberOfInstallments - 1;
+    const remainingTotal = student.pendingAmount - firstInstallmentAmount;
+
+    if (remainingCount === 0 && remainingTotal !== 0) {
+      throw new BadRequestError(
+        'With only 1 installment, the first installment amount must equal the full pending balance'
+      );
+    }
+    if (remainingCount > 0 && remainingTotal <= 0) {
+      throw new BadRequestError(
+        'Nothing left to split across the remaining installments — reduce the first installment amount or the number of installments'
+      );
+    }
+
+    let firstPaymentId: any;
+    if (firstInstallmentPaid) {
+      if (!paymentMethod) {
+        throw new BadRequestError('paymentMethod is required when the first installment is already paid');
+      }
+      const payment = await recordPaymentAndNotify({
+        student,
+        courseId: student.courseId,
+        amount: firstInstallmentAmount,
+        paymentMode: numberOfInstallments === 1 ? 'full' : 'emi',
+        paymentMethod,
+        transactionId,
+        recordedBy: req.user!._id,
+      });
+      firstPaymentId = payment._id;
+    }
+
+    installmentsToInsert = [
+      {
+        studentId: student._id,
+        installmentNumber: 1,
+        amount: firstInstallmentAmount,
+        dueDate: firstDueDate,
+        status: firstInstallmentPaid ? 'paid' : 'pending',
+        ...(firstInstallmentPaid && { paidDate: new Date(), paymentId: firstPaymentId }),
+      },
+    ];
+
+    if (remainingCount > 0) {
+      const amounts = calculateInstallments(remainingTotal, remainingCount);
+      amounts.forEach((amount, i) => {
+        installmentsToInsert.push({
+          studentId: student._id,
+          installmentNumber: i + 2,
+          amount,
+          dueDate: new Date(firstDueDate.getTime() + (i + 1) * interval * 24 * 60 * 60 * 1000),
+          status: 'pending',
+        });
+      });
+    }
+  } else {
+    const amounts = calculateInstallments(student.pendingAmount, numberOfInstallments);
+    installmentsToInsert = amounts.map((amount, i) => ({
       studentId: student._id,
       installmentNumber: i + 1,
       amount,
       dueDate: new Date(firstDueDate.getTime() + i * interval * 24 * 60 * 60 * 1000),
       status: 'pending',
-    }))
-  );
+    }));
+  }
+
+  const installments = await Installment.insertMany(installmentsToInsert);
 
   sendResponse(res, { statusCode: 201, message: 'Installment plan generated', data: installments });
 });

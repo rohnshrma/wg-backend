@@ -10,7 +10,7 @@ import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
 import { notifyAdmins } from '../utils/notifyAdmins';
-import { getPagination } from '../utils/helpers';
+import { getPagination, calculateInstallments } from '../utils/helpers';
 import {
   BadRequestError,
   NotFoundError,
@@ -247,12 +247,58 @@ export const updateStudent = asyncHandler(
       updatePayload.courseFees = course.fees;
     }
 
+    // An admin cutting the fee below what's already been paid would drive
+    // pendingAmount negative — that's an overpayment/refund situation, not
+    // something to represent silently as a negative balance.
+    const isFeeChange =
+      isAdminUpdate &&
+      updatePayload.courseFees !== undefined &&
+      updatePayload.courseFees !== student.courseFees;
+    if (isFeeChange && updatePayload.courseFees < student.totalPaid) {
+      throw new BadRequestError(
+        `New course fees (₹${updatePayload.courseFees}) is less than the amount already paid (₹${student.totalPaid}). Handle the refund separately first.`
+      );
+    }
+
     // Update fields
     const updatedStudent = await Student.findByIdAndUpdate(
       req.params.id,
       { $set: updatePayload },
       { new: true, runValidators: true }
     );
+
+    // Installment amounts are a one-time snapshot of pendingAmount at plan
+    // creation (see generateInstallmentPlan) — they don't recompute
+    // themselves when the fee changes later, so a negotiated discount would
+    // otherwise leave the schedule silently pointing at the old total.
+    // Rebalance only the still-unpaid installments, in place, preserving
+    // due dates and paid history.
+    let installmentWarning: string | undefined;
+    if (isFeeChange && updatedStudent) {
+      const unpaid = await Installment.find({
+        studentId: updatedStudent._id,
+        status: { $in: ['pending', 'overdue'] },
+      }).sort({ installmentNumber: 1 });
+
+      if (unpaid.length > 0) {
+        const hasAutopay = unpaid.some((inst) => inst.collectionMethod === 'autopay');
+        if (hasAutopay) {
+          // Razorpay subscriptions charge a fixed per-cycle amount already
+          // committed to on their side — rewriting our local `amount` field
+          // would just make our records lie about what actually gets
+          // auto-debited. Flag it instead of silently diverging.
+          installmentWarning =
+            'This student has AutoPay installments — their amounts were NOT adjusted. AutoPay mandate amounts are fixed on Razorpay and must be changed by cancelling and recreating the mandate.';
+        } else {
+          const amounts = calculateInstallments(updatedStudent.pendingAmount, unpaid.length);
+          await Promise.all(
+            unpaid.map((inst, i) =>
+              Installment.updateOne({ _id: inst._id }, { $set: { amount: amounts[i] } })
+            )
+          );
+        }
+      }
+    }
 
     // Notify student if admin made the update
     if (isAdminUpdate && student.userId) {
@@ -268,6 +314,7 @@ export const updateStudent = asyncHandler(
     sendResponse(res, {
       message: 'Student updated successfully',
       data: updatedStudent,
+      warning: installmentWarning,
     });
   }
 );

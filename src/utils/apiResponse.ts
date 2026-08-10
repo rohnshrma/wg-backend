@@ -11,6 +11,10 @@ interface ApiResponsePayload<T> {
     total?: number;
     totalPages?: number;
   };
+  // A non-fatal, user-facing caveat about the result (e.g. "this part of
+  // the update couldn't be applied automatically") — distinct from
+  // `message`, which describes the primary action that succeeded.
+  warning?: string;
 }
 
 interface ApiResponseOptions<T> extends ApiResponsePayload<T> {
@@ -32,6 +36,7 @@ export function sendResponse<T>(
   let message: string;
   let data: T | undefined;
   let meta: ApiResponsePayload<T>['meta'];
+  let warning: string | undefined;
 
   if (maybeOptions) {
     // Called as sendResponse(res, { ... })
@@ -41,6 +46,7 @@ export function sendResponse<T>(
     message = maybeOptions.message;
     data = maybeOptions.data;
     meta = maybeOptions.meta;
+    warning = maybeOptions.warning;
   } else {
     // Called as sendResponse({ res, ... })
     const opts = resOrOptions as ApiResponseOptions<T>;
@@ -50,6 +56,7 @@ export function sendResponse<T>(
     message = opts.message;
     data = opts.data;
     meta = opts.meta;
+    warning = opts.warning;
   }
 
   const response: Record<string, unknown> = {
@@ -63,6 +70,10 @@ export function sendResponse<T>(
 
   if (meta) {
     response.meta = meta;
+  }
+
+  if (warning) {
+    response.warning = warning;
   }
 
   res.status(statusCode).json(response);

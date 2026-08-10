@@ -60,7 +60,7 @@ const leadSchema = new Schema<ILead>(
     },
     source: {
       type: String,
-      enum: ['hero_form', 'popup', 'exit_intent', 'contact_page', 'course_page', 'book_demo'],
+      enum: ['hero_form', 'popup', 'exit_intent', 'contact_page', 'course_page', 'book_demo', 'sticky_cta'],
       default: 'hero_form',
     },
     status: {

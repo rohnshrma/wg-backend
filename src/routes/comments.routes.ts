@@ -8,7 +8,7 @@ import { NotFoundError } from '../utils/apiError';
 const router = Router();
 
 // Public — get approved comments for a blog
-router.get('/blog/:blogId', asyncHandler(async (req: Request, res: Response) => {
+router.get('/blog/:blogId', asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const comments = await Comment.find({
     blog: req.params.blogId,
     isApproved: true,
@@ -16,27 +16,25 @@ router.get('/blog/:blogId', asyncHandler(async (req: Request, res: Response) => 
     .sort({ createdAt: -1 })
     .select('-email');
 
-  const count = await Comment.countDocuments({
-    blog: req.params.blogId,
-    isApproved: true,
-  });
+  const count = comments.length;
 
   sendResponse(res, {
     message: 'Comments fetched',
     data: comments,
-    meta: { count },
+    meta: { total: count },
   });
 }));
 
 // Public — post a comment
-router.post('/', asyncHandler(async (req: Request, res: Response) => {
+router.post('/', asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { blog, author, email, content } = req.body;
 
   if (!blog || !author || !email || !content) {
-    return res.status(422).json({
+    res.status(422).json({
       success: false,
       message: 'Missing required fields: blog, author, email, content',
     });
+    return;
   }
 
   const comment = await Comment.create({

@@ -5,10 +5,12 @@ export interface IBlog extends Document {
   slug: string;
   excerpt: string;
   content: string;
+  contentType: "html" | "plain";
   coverImageUrl: string;
   author: mongoose.Types.ObjectId;
   category: string;
   tags: string[];
+  relatedPosts?: mongoose.Types.ObjectId[];
   isPublished: boolean;
   publishedAt?: Date;
   metaTitle?: string;
@@ -39,6 +41,11 @@ const blogSchema = new Schema<IBlog>(
       type: String,
       required: [true, 'Content is required'],
     },
+    contentType: {
+      type: String,
+      enum: ['html', 'plain'],
+      default: 'html',
+    },
     coverImageUrl: {
       type: String,
       required: [true, 'Cover image is required'],
@@ -54,6 +61,12 @@ const blogSchema = new Schema<IBlog>(
       trim: true,
     },
     tags: [{ type: String, trim: true }],
+    relatedPosts: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Blog',
+      },
+    ],
     isPublished: { type: Boolean, default: false },
     publishedAt: Date,
     metaTitle: String,

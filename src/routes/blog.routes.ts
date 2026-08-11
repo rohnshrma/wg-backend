@@ -67,7 +67,7 @@ router.get('/admin/all', protect, authorize('admin'), asyncHandler(async (req: R
 
 // Admin — fetch single blog by id (any status, full content) for editing
 router.get('/admin/:id', protect, authorize('admin'), asyncHandler(async (req: Request, res: Response) => {
-  const blog = await Blog.findById(req.params.id).populate('author', 'email');
+  const blog = await Blog.findById(req.params.id).populate('author', 'email').populate('relatedPosts', 'title slug _id');
   if (!blog) throw new NotFoundError('Blog not found');
   sendResponse(res, { message: 'Blog fetched', data: blog });
 }));
@@ -77,7 +77,7 @@ router.get('/:slug', asyncHandler(async (req: Request, res: Response) => {
     { slug: req.params.slug, isPublished: true },
     { $inc: { viewCount: 1 } },
     { new: true }
-  ).populate('author', 'email');
+  ).populate('author', 'email').populate('relatedPosts', 'title slug category');
 
   if (!blog) throw new NotFoundError('Blog not found');
   sendResponse(res, { message: 'Blog fetched', data: blog });

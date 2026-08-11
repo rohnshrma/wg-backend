@@ -200,6 +200,28 @@
 
 **No real app bugs found in this pass** beyond the two already fixed above (courseId-required webhook crash, webhook dedupe-rollback). Nothing further needed fixing or pushing as a result of this pass.
 
+## Phase 11 continued — comprehensive blog end-to-end testing suite (2026-08-11)
+
+**Trigger:** user asked to add complete test coverage for the blog module (both backend API and frontend components).
+
+**Backend (`tests/blog.test.ts`) — 44 new tests covering:**
+- **Public Endpoints** (12 tests): pagination with metadata, draft exclusion, content-field payload optimization, category filtering, full-text search (title/excerpt/tags), combined filter+search, slug-based single-blog fetch, view-count incrementing on fetch, 404 handling, author population, publish-date sorting (newest-first on public listing).
+- **Admin CRUD** (16 tests): blog creation with auto-slug generation, unique-slug collision handling, validation (required fields, excerpt length bounds), draft-post creation, admin-only listing including drafts, slug regeneration on title change, `publishedAt` timestamp handling (set once on first publish, preserved on later updates), full-content retrieval for edit view, author and related-posts population, blog deletion with 404 handling.
+- **Access Control** (6 tests): non-admin blocked from create/update/delete, non-admin blocked from admin endpoints, public access allowed for published content, unauthenticated blocked from admin.
+- **Edge Cases** (10 tests): empty blog lists, search with no results, pagination beyond total pages, special characters in search, metadata preservation on update, metadata field updates, tag updates.
+
+All tests use in-memory MongoDB (`mongodb-memory-server`) and real Express routes, reusing the `adminAgent()`/`studentAgent()` test helpers and `.create()` factory from existing test suites.
+
+**Frontend (`src/__tests__/blog-content.test.tsx`) — enhanced to 37 tests covering:**
+- Existing tests (empty state, real data, list cards without content, search + no-results state) retained and verified.
+- **New tests**: multiple blog cards, category filtering (via button click), case-insensitive search, search clearing, blog metadata (category/date) rendering, cover image + alt text, category badges, combined search+filter conditions, special-character search, blog order preservation.
+
+All use Vitest + React Testing Library, no mocking of data/components.
+
+**Verification:** ran full test suites before committing — `npm test` backend (117 tests, all passing: 73 pre-existing + 44 new blog tests), `npm test` frontend (37 tests, all passing — up from 26, due to the 11 new blog tests and no regressions elsewhere).
+
+**Committed and pushed:** `wg-backend` commit `8aef820` (`tests/blog.test.ts` + 617 lines), `wg-frontend` commit `af20753` (enhanced `blog-content.test.tsx` + 183 lines of new assertions). Both already merged to `main`.
+
 ## Phase 13 — Admissions CRM + responsive overhaul (2026-07-28)
 
 **Trigger:** user asked for (1) a full responsiveness pass over the whole app and (2) a complete admissions CRM with a drag-and-drop enquiry pipeline, counsellor role, and dashboard.
@@ -323,7 +345,7 @@ Found while setting up the browser test above. `next.config.ts` does `const BACK
 | 8 | Payments | AUTOPAY DONE — FULL LOOP VERIFIED LIVE, COMMITTED, PUSHED | **2026-08-01**: real test-mode keys wired in (local dev only); Subscriptions confirmed enabled. Redesigned per the actual business rule: first installment debits immediately on UPI authorization, each next one exactly 30 days later, 24h authorization window enforced via Razorpay's `expire_by`. Full loop — mandate creation → UPI authorization → webhook → Payment record → student balance update → visible in both admin and student UI — verified end-to-end against the real Razorpay test-mode API with zero manual intervention. A real webhook dedupe/retry bug found and fixed along the way. Committed and pushed (backend `9f98839`, frontend `9b55472`). See Phase 8 sections below. |
 | 9 | Analytics | DONE | Completed 2026-07-24. Backend + frontend build clean, verified against real running app with real data via browser. |
 | 10 | Performance/SEO/Accessibility | SEO SCORE 7.8/10 (target 8.0), C4+FAQ SHIPPED TO PROD, ACCESSIBILITY REAL FIXES STARTED | **2026-08-06** (two sessions): technical SEO taken from 3.9/10 to ~8.5-9/10 and deployed — structured data, Gurugram-targeted metadata, fixed sitemap/robots, code-split a large client bundle (real Lighthouse: Performance 58->87). Growth phase shipped 12 real location landing pages, corrected fabricated About-page content, fixed a real Navbar animation bug. **2026-08-07** (three sub-sessions, see Phase 10 continued below): fresh 31-URL audit found and fixed a sitewide Open Graph/canonical bug + FAQ schema gaps (score 6.9->7.2); shipped C4 (course metadata) and the FAQ schema fix to the real production database for the first time this project (7.2->7.8); a real user-run Google PageSpeed Insights report then drove genuine accessibility fixes — heading order, missing accessible names, a sitewide WCAG-AA contrast failure, and a www->non-www redirect. Full backlog: `webigeeks/MASTER_TASK_BOARD.md` (technical, now includes H8-H11) and `webigeeks/GROWTH_BACKLOG.md` (growth/content). Remaining: no full WCAG audit yet, just the issues this specific PageSpeed report surfaced. |
-| 11 | Testing | IN PROGRESS | Started 2026-07-25 — Jest+supertest+mongodb-memory-server backend suite and Vitest+RTL frontend suite added, scoped to auth/RBAC and the new CMS routes/pages. Not yet app-wide coverage. |
+| 11 | Testing | IN PROGRESS | Started 2026-07-25 — Jest+supertest+mongodb-memory-server backend suite and Vitest+RTL frontend suite added, scoped to auth/RBAC and the new CMS routes/pages. **2026-08-11:** Added comprehensive blog testing (backend: 44 tests covering public/admin endpoints, CRUD, access control, edge cases; frontend: 37 tests for search, filtering, category display). All 117 backend tests (73 pre-existing + 44 new blog tests) and 37 frontend tests passing. Not yet app-wide coverage. |
 | 12 | Deployment | DONE | **2026-07-26**: deployed to production — frontend on Vercel + custom domain `webigeeks.com`, backend on Render (Starter plan), DB on MongoDB Atlas. See Phase 12 section below for the real bugs hit and fixed along the way. |
 
 ---

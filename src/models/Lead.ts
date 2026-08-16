@@ -10,10 +10,36 @@ export interface ILead extends Document {
   name: string;
   phone: string;
   email: string;
-  courseInterested: string;
+  // Institute-era field — kept for old leads and any course-based inquiry
+  // flow. Agency inquiries use projectType/budget/timeline instead; a lead
+  // must have at least one of courseInterested or projectType (enforced in
+  // the controller, not here, since "at least one of two fields" isn't a
+  // single-field schema constraint).
+  courseInterested?: string;
+  projectType?: string;
+  budget?: string;
+  timeline?: string;
+  company?: string;
+  website?: string;
   message?: string;
 
-  source: 'hero_form' | 'popup' | 'exit_intent' | 'contact_page' | 'course_page' | 'book_demo';
+  source:
+    | 'hero_form'
+    | 'popup'
+    | 'exit_intent'
+    | 'contact_page'
+    | 'course_page'
+    | 'book_demo'
+    | 'sticky_cta'
+    // Agency site sources (webigeeksdigital.com) — additive, alongside the
+    // institute-site sources above.
+    | 'website_hero'
+    | 'services_page'
+    | 'work_page'
+    | 'contact_form'
+    | 'social'
+    | 'referral'
+    | 'other';
   status: 'new' | 'contacted' | 'interested' | 'converted' | 'cold' | 'lost';
 
   notes: ILeadNote[];
@@ -51,7 +77,26 @@ const leadSchema = new Schema<ILead>(
     },
     courseInterested: {
       type: String,
-      required: [true, 'Course interest is required'],
+      trim: true,
+    },
+    projectType: {
+      type: String,
+      trim: true,
+    },
+    budget: {
+      type: String,
+      trim: true,
+    },
+    timeline: {
+      type: String,
+      trim: true,
+    },
+    company: {
+      type: String,
+      trim: true,
+    },
+    website: {
+      type: String,
       trim: true,
     },
     message: {
@@ -60,7 +105,22 @@ const leadSchema = new Schema<ILead>(
     },
     source: {
       type: String,
-      enum: ['hero_form', 'popup', 'exit_intent', 'contact_page', 'course_page', 'book_demo', 'sticky_cta'],
+      enum: [
+        'hero_form',
+        'popup',
+        'exit_intent',
+        'contact_page',
+        'course_page',
+        'book_demo',
+        'sticky_cta',
+        'website_hero',
+        'services_page',
+        'work_page',
+        'contact_form',
+        'social',
+        'referral',
+        'other',
+      ],
       default: 'hero_form',
     },
     status: {

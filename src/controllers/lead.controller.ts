@@ -14,10 +14,14 @@ import { getPagination } from '../utils/helpers';
  */
 export const submitInquiry = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const { name, phone, email, courseInterested, message, source } = req.body;
+    const { name, phone, email, courseInterested, projectType, budget, timeline, company, website, message, source } =
+      req.body;
 
-    if (!name || !phone || !email || !courseInterested) {
-      throw new BadRequestError('Name, phone, email, and course are required');
+    // A lead needs at least one "what are they interested in" signal — either
+    // the institute's courseInterested or the agency's projectType.
+    const interest = courseInterested || projectType;
+    if (!name || !phone || !email || !interest) {
+      throw new BadRequestError('Name, phone, email, and course/project type are required');
     }
 
     const lead = await Lead.create({
@@ -25,14 +29,19 @@ export const submitInquiry = asyncHandler(
       phone,
       email,
       courseInterested,
+      projectType,
+      budget,
+      timeline,
+      company,
+      website,
       message,
       source: source || 'hero_form',
     });
 
-    NotificationService.newLead(name, phone, email, courseInterested, lead.source).catch((error) => {
+    NotificationService.newLead(name, phone, email, interest, lead.source).catch((error) => {
       console.error('Failed to send new-lead notification:', error);
     });
-    notifyAdmins('New Inquiry 🔔', `${name} enquired about ${courseInterested}.`, '/admin/leads').catch((error) => {
+    notifyAdmins('New Inquiry 🔔', `${name} enquired about ${interest}.`, '/admin/leads').catch((error) => {
       console.error('Failed to create admin notification for new lead:', error);
     });
 

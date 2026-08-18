@@ -144,6 +144,21 @@ export const addNote = asyncHandler(
 );
 
 /**
+ * @desc    Delete lead
+ * @route   DELETE /api/leads/:id
+ * @access  Admin
+ */
+export const deleteLead = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const lead = await Lead.findByIdAndDelete(req.params.id);
+
+    if (!lead) throw new NotFoundError('Lead not found');
+
+    sendResponse(res, { message: 'Lead deleted', data: { id: lead._id } });
+  }
+);
+
+/**
  * @desc    Convert lead to student (mark as converted)
  * @route   PATCH /api/leads/:id/convert
  * @access  Admin

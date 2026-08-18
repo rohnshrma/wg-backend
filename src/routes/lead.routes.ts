@@ -6,6 +6,7 @@ import {
   getAllLeads,
   getLeadById,
   updateLead,
+  deleteLead,
   addNote,
   convertLead,
 } from '../controllers/lead.controller';
@@ -19,6 +20,7 @@ router.post('/', inquiryLimiter, submitInquiry);
 router.get('/', protect, authorize('admin'), getAllLeads);
 router.get('/:id', protect, authorize('admin'), getLeadById);
 router.put('/:id', protect, authorize('admin'), updateLead);
+router.delete('/:id', protect, authorize('admin'), deleteLead);
 router.post('/:id/notes', protect, authorize('admin'), addNote);
 router.patch('/:id/convert', protect, authorize('admin'), convertLead);
 

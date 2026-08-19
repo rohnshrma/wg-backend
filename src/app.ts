@@ -27,6 +27,13 @@ const allowedOrigins = [
   env.SITE_URL,
   'http://localhost:3000',
   'http://127.0.0.1:3000',
+  // Ads landing-page domain — same wg-frontend Vercel deployment, different
+  // host, so it needs its own CORS entry. Without this, every browser
+  // request from webigeeks.in was rejected here (curl/Postman requests have
+  // no Origin header and skip this check entirely, which is why this only
+  // showed up for real visitors, never in manual testing).
+  'https://webigeeks.in',
+  'https://www.webigeeks.in',
 ].filter(Boolean);
 
 // Dev-only: the frontend's own rewrite proxy (next.config.ts) forwards the

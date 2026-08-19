@@ -2,6 +2,12 @@
 
 Notable changes to the backend. Full context and rationale for each entry lives in `ROADMAP.md`; this file is a scannable index.
 
+## 2026-08-19
+
+- **Bug fix**: CORS allowlist didn't include the new `webigeeks.in` ads domain — every real browser lead submission from it failed with a 500 (`curl`/Postman testing couldn't catch this since those send no `Origin` header). Added `https://webigeeks.in` / `https://www.webigeeks.in` to `allowedOrigins` in `app.ts`.
+- Added `DELETE /api/leads/:id` (admin-only) — no delete route existed for leads before this.
+- See `ROADMAP.md` "Data Analytics ads landing page + webigeeks.in launch" for full detail, plus an important note on `~/Desktop/webigeeks` and `~/dev/webigeeks` checkout health.
+
 ## 2026-07-25
 
 - **Security fix**: closed a mass-assignment vulnerability in `PUT /api/students/:id` that let a student self-assign `status`, `isProfileLocked`, `totalPaid`, `admissionId`, etc. on their own record. Students are now restricted to an explicit field allowlist; admins retain full access.

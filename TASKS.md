@@ -5,22 +5,53 @@
 > three regressions that surfaced after". Read that section first — it explains *why*
 > each of these is worded the way it is.
 >
-> State at handoff: `wg-frontend` `main` is at `8ad8e17`, pushed and live on Vercel.
+> State at handoff: `wg-frontend` `main` is at `770242b`, pushed and live on Vercel.
 > 48/48 tests green, `tsc`/eslint/build clean. Nothing is half-finished — every item
 > below is new work, not a resumption.
 
 ---
 
-## 1. Two accessibility fixes (small, safe, do first)
+## 1. Accessibility
 
-Found by the local Lighthouse run. Accessibility is 95; these two are what's between it and ~100.
+Lighthouse's two findings are **done** (`770242b`, deployed) — Accessibility **95 → 100**,
+no remaining failed audits. Kept here only so nobody re-does them:
 
-- [ ] **Footer disclaimer fails contrast.** "*Terms and conditions apply. See counselor for details." is `#575d6a` on `#0f172a` = **2.7:1**, below the 4.5 minimum.
-      `DataAnalyticsContent.tsx`, footer, the `text-white/30` class. Bump until it passes — check the computed ratio, don't just eyeball it.
-- [ ] **Heading order skips a level.** The hero form's `<h3>` "Get Your Free Demo + Career Roadmap" follows the `<h1>` with no `<h2>` between (`HeroDemoForm.tsx`).
-      Change the tag, keep the visual size with classes. Don't renumber the section `<h2>`s to accommodate it — they're correct.
+- [x] Footer disclaimer contrast — `text-white/30` composited to `#575D6A` on `#0F172A` = 2.70:1. Now `/50` = 5.23:1.
+- [x] Hero form heading — `<h3>` directly after the `<h1>` → `<h2>`. The success-state heading ("You're in!") had the identical problem and was fixed with it; Lighthouse only saw the form one because it never submits the form. Live sequence is `h1 → h2 → h2 → h2 → h3`, zero skips.
 
-Verify by re-running Lighthouse locally (see §5 for the command).
+### [ ] Open: does anything fail contrast **over the hero/CTA gradient**?
+
+Lighthouse cannot evaluate contrast over a gradient, so it silently skips these — its 100
+score does **not** mean they pass. Found while fixing the above and deliberately not acted on.
+
+`gradient-hero` is `linear-gradient(135deg, #0F172A 0%, #0B395C 40%, #1672B8 100%)`.
+Composited white text against each stop:
+
+| class | over `#0F172A` | over `#0B395C` | over `#1672B8` |
+|---|---|---|---|
+| `text-white/40` (closing-CTA caption, `DataAnalyticsContent.tsx` ~line 772) | 3.81 | 3.23 | **2.04** |
+| `text-white/65` (hero subhead — long-standing) | — | — | **3.08** |
+| `text-white/70` (hero body copy — long-standing) | — | — | **3.33** |
+
+**Why this is not a straightforward "bump the opacity" fix, and why I left it:**
+
+1. The table is a *worst case*. It assumes the text sits over the gradient's lightest
+   corner. At `135deg` the light end is bottom-right, and the CTA caption is centred — so
+   the real background behind it may be much darker than `#1672B8`.
+2. The same math condemns the hero's existing `/65` and `/70` body copy, which plainly
+   reads fine on screen. **A model that flags text you can see is perfectly legible is a
+   model that is wrong, not a bug list.**
+3. Raising opacity makes it **worse** at the light end, not better — white on medium blue
+   converges. Nothing below `/95` passes over `#1672B8`. So the instinctive fix is
+   backwards, and shipping it would make the page uglier for no gain.
+
+**Do this instead:** sample the *actual rendered pixel* behind each element rather than
+modelling gradient stops — screenshot the deployed page, read the RGB directly under the
+text at a few viewport widths, and compute the ratio against that. Only then decide whether
+anything genuinely fails. If something does, the fix is likely a local scrim/darker overlay
+behind that text, not a global opacity change.
+
+Verify any a11y change by re-running Lighthouse locally (see §5).
 
 ---
 

@@ -14,6 +14,14 @@ export const ENQUIRY_SOURCES = [
   'offline_marketing',
   'website',
   'google_maps',
+  // Inbound WhatsApp enquiry (AI admissions automation). Both JustDial and
+  // Google Ads leads currently land on the same WhatsApp number with no
+  // distinguishing signal in the message itself, so they can't honestly be
+  // split into 'justdial' vs a hypothetical 'google_ads' value yet — doing so
+  // would silently fabricate attribution data. If a distinguishing signal
+  // (e.g. per-channel pre-filled wa.me links) is added later, this can be
+  // split without a migration since 'whatsapp' stays valid either way.
+  'whatsapp',
 ] as const;
 
 export const WORKING_STATUSES = ['student', 'working', 'fresher', 'other'] as const;
@@ -44,6 +52,14 @@ export interface IEnquiry extends Document {
   stageHistory: IStageHistoryEntry[];
   owner: mongoose.Types.ObjectId;
   createdBy: mongoose.Types.ObjectId;
+
+  // Additive fields for the WhatsApp AI admissions automation — optional,
+  // unused by any existing code path. Set when the AI can't confidently
+  // continue a conversation (see docs/whatsapp-ai-admissions.md).
+  requiresHumanFollowUp?: boolean;
+  humanFollowUpReason?: string;
+  humanFollowUpAt?: Date;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -124,6 +140,10 @@ const enquirySchema = new Schema<IEnquiry>(
       ref: 'User',
       required: true,
     },
+
+    requiresHumanFollowUp: { type: Boolean, default: false },
+    humanFollowUpReason: { type: String, trim: true, maxlength: 500 },
+    humanFollowUpAt: Date,
   },
   { timestamps: true }
 );
@@ -132,6 +152,7 @@ enquirySchema.index({ stage: 1, updatedAt: -1 });
 enquirySchema.index({ owner: 1, stage: 1 });
 enquirySchema.index({ mobile: 1 });
 enquirySchema.index({ source: 1 });
+enquirySchema.index({ requiresHumanFollowUp: 1 });
 enquirySchema.index({ enquiryDate: -1 });
 enquirySchema.index({ createdAt: -1 });
 // Powers the name/mobile/course search box. A text index ranks by relevance,

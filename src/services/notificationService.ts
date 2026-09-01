@@ -24,7 +24,9 @@ import {
   sendAutoDebitSuccessEmail,
   sendAutoDebitFailedEmail,
   sendMandateAlertEmail,
+  sendDemoScheduledAdminEmail,
 } from "./emailService";
+import { env } from "../config/env";
 
 /**
  * Unified notification service — sends via email + WhatsApp in parallel.
@@ -210,5 +212,44 @@ export const NotificationService = {
   // AutoPay — mandate needs manual follow-up (halted/cancelled)
   async mandateNeedsAttention(studentName: string, admissionId: string | undefined, reason: string) {
     await sendMandateAlertEmail(studentName, admissionId, reason);
+  },
+
+  // WhatsApp AI admissions automation — the one notification the brief
+  // actually wants sent routinely: a demo got booked. Goes to ADMIN_WHATSAPP
+  // (already used for other admin alerts) + the admin email inbox.
+  async whatsappDemoScheduled(params: {
+    name: string;
+    phone: string;
+    course: string;
+    date: string;
+    time: string;
+    paymentStatus: string;
+    enquiryRef: string;
+  }) {
+    const tasks = [sendDemoScheduledAdminEmail(params)];
+    if (env.ADMIN_WHATSAPP) {
+      tasks.push(
+        sendWhatsAppText(
+          env.ADMIN_WHATSAPP,
+          `📅 *Demo Scheduled (WhatsApp AI)*\n\n👤 ${params.name}\n📞 ${params.phone}\n📚 ${params.course}\n🗓️ ${params.date} at ${params.time}\n💳 Payment: ${params.paymentStatus}\n🔗 Enquiry: ${params.enquiryRef}`
+        )
+      );
+    }
+    await Promise.allSettled(tasks);
+  },
+
+  // WhatsApp AI admissions automation — the AI couldn't confidently continue
+  // (angry customer, refund/payment dispute, unusual discount ask, low
+  // confidence, etc.) and needs a human. Deliberately WhatsApp-only, not
+  // email — this can happen more often than a demo booking, and doubling it
+  // up on email would be notification fatigue for a "come look at this"
+  // alert rather than the one actionable event (Demo Scheduled) the brief
+  // calls out specifically.
+  async whatsappEscalation(params: { name: string; phone: string; reason: string; enquiryRef: string }) {
+    if (!env.ADMIN_WHATSAPP) return;
+    await sendWhatsAppText(
+      env.ADMIN_WHATSAPP,
+      `🆘 *WhatsApp AI needs a human*\n\n👤 ${params.name}\n📞 ${params.phone}\n📋 Reason: ${params.reason}\n🔗 Enquiry: ${params.enquiryRef}`
+    ).catch((error) => console.error('[notification] whatsappEscalation failed:', error));
   },
 };

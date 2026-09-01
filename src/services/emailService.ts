@@ -431,6 +431,40 @@ export const sendMandateAlertEmail = (
     ),
   });
 
+// 7b. WhatsApp AI admissions automation — demo scheduled (the one
+// notification the automation is meant to send routinely)
+export const sendDemoScheduledAdminEmail = (params: {
+  name: string;
+  phone: string;
+  course: string;
+  date: string;
+  time: string;
+  paymentStatus: string;
+  enquiryRef: string;
+}) =>
+  sendEmail({
+    to: env.ADMIN_EMAIL || env.CONTACT_EMAIL || "webigeeksofficial@gmail.com",
+    subject: `📅 Demo Scheduled (WhatsApp AI) — ${params.name}`,
+    html: baseTemplate(
+      `
+      <h2>Demo Scheduled via WhatsApp AI 📅</h2>
+      <div class="info-box">
+        <p><strong>Name:</strong> ${params.name}</p>
+        <p><strong>Phone:</strong> ${params.phone}</p>
+        <p><strong>Course:</strong> ${params.course}</p>
+        <p><strong>Demo Date:</strong> ${params.date}</p>
+        <p><strong>Demo Time:</strong> ${params.time}</p>
+        <p><strong>Payment Status:</strong> ${params.paymentStatus}</p>
+        <p><strong>Enquiry Ref:</strong> ${params.enquiryRef}</p>
+      </div>
+      <p style="text-align: center;">
+        <a href="${env.SITE_URL || "https://webigeeks.com"}/admin/enquiries" class="btn btn-accent">View in CRM</a>
+      </p>
+      `,
+      "Demo Scheduled"
+    ),
+  });
+
 // 8. General Broadcast / Announcement Email
 export const sendBroadcastEmail = (
   to: string,

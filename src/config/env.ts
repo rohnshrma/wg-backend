@@ -49,6 +49,24 @@ const envSchema = z
     WHATSAPP_ADMIN_PHONE: z.string().default(''),
     ADMIN_WHATSAPP: z.string().default(''),
 
+    // WhatsApp AI Admissions Automation — everything here is optional and the
+    // whole feature defaults OFF (see config/whatsappAutomation.ts). Absent in
+    // dev is fine, same graceful-degradation pattern as Razorpay/Cloudinary.
+    WHATSAPP_AUTOMATION_ENABLED: z.coerce.boolean().default(false),
+    // Cosmetic only — the actual send/receive API calls use
+    // WHATSAPP_PHONE_NUMBER_ID (Meta's internal resource id, not a real
+    // phone number). This is purely what the CRM conversation log displays
+    // as "our" number in a thread.
+    WHATSAPP_BUSINESS_NUMBER: z.string().default(''),
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().default(''),
+    // Meta App Secret (not the access token) — used to verify the
+    // X-Hub-Signature-256 header on inbound webhook deliveries.
+    WHATSAPP_APP_SECRET: z.string().default(''),
+    ANTHROPIC_API_KEY: z.string().default(''),
+    ANTHROPIC_MODEL: z.string().default('claude-sonnet-5'),
+    // Rupees. 0 = free demo. Never hardcoded elsewhere — read at booking time.
+    DEMO_FEE_AMOUNT: z.coerce.number().default(0),
+
     // Google OAuth
     GOOGLE_CLIENT_ID: z.string().default(''),
     GOOGLE_CLIENT_SECRET: z.string().default(''),

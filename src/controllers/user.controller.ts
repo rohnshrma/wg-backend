@@ -17,6 +17,7 @@ export const getStaffUsers = asyncHandler(
     const role = req.query.role as string;
 
     const query: Record<string, unknown> = {
+      tenantId: req.tenantId,
       role: role && role !== 'all' ? role : { $in: ['admin', 'counsellor'] },
     };
 
@@ -44,12 +45,13 @@ export const createStaffUser = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { email, password, name, role } = req.body;
 
-    const existing = await User.findOne({ email });
+    const existing = await User.findOne({ tenantId: req.tenantId, email });
     if (existing) {
       throw new ConflictError('An account with this email already exists');
     }
 
     const user = await User.create({
+      tenantId: req.tenantId,
       email,
       password,
       name,
@@ -78,7 +80,7 @@ export const createStaffUser = asyncHandler(
  */
 export const updateStaffUser = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const user = await User.findById(req.params.id);
+    const user = await User.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!user) throw new NotFoundError('User not found');
 
     if (user.role === 'student') {
@@ -92,7 +94,7 @@ export const updateStaffUser = asyncHandler(
     const isSelfDemotion =
       user.role === 'admin' && (role === 'counsellor' || isActive === false);
     if (isSelfDemotion) {
-      const adminCount = await User.countDocuments({ role: 'admin', isActive: true });
+      const adminCount = await User.countDocuments({ tenantId: req.tenantId, role: 'admin', isActive: true });
       if (adminCount <= 1) {
         throw new BadRequestError('Cannot demote or deactivate the last active admin');
       }
@@ -126,7 +128,7 @@ export const updateStaffUser = asyncHandler(
  */
 export const deleteStaffUser = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const user = await User.findById(req.params.id);
+    const user = await User.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!user) throw new NotFoundError('User not found');
 
     if (user.role === 'student') {
@@ -138,7 +140,7 @@ export const deleteStaffUser = asyncHandler(
     }
 
     if (user.role === 'admin') {
-      const adminCount = await User.countDocuments({ role: 'admin', isActive: true });
+      const adminCount = await User.countDocuments({ tenantId: req.tenantId, role: 'admin', isActive: true });
       if (adminCount <= 1) {
         throw new BadRequestError('Cannot delete the last active admin');
       }

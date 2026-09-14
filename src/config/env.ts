@@ -58,6 +58,13 @@ const envSchema = z
     SITE_URL: z.string().default('http://localhost:3000'),
     FRONTEND_URL: z.string().default('http://localhost:3000'),
 
+    // Multi-tenancy — the platform's own domain, whose subdomains
+    // (<slug>.PLATFORM_ROOT_DOMAIN) resolve to a tenant; DEFAULT_TENANT_SLUG
+    // is the fallback used in local dev and for requests with no matching
+    // custom domain or subdomain (e.g. the bare webigeeks.in apex today).
+    PLATFORM_ROOT_DOMAIN: z.string().default('localhost'),
+    DEFAULT_TENANT_SLUG: z.string().default('webigeeks'),
+
     // Contact
     CONTACT_PHONE: z.string().default('+91 8766367815'),
     CONTACT_EMAIL: z.string().default('webigeeksofficial@gmail.com'),

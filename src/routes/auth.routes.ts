@@ -12,6 +12,7 @@ import {
   googleCallback,
 } from '../controllers/auth.controller';
 import { protect } from '../middleware/auth.middleware';
+import { resolveTenant } from '../middleware/tenant.middleware';
 import { authLimiter } from '../middleware/rateLimiter';
 import validate from '../middleware/validate.middleware';
 import env from '../config/env';
@@ -26,9 +27,21 @@ import {
 
 const router = Router();
 
-router.post('/register', authLimiter, validate(registerSchema), register);
-router.post('/login', authLimiter, validate(loginSchema), login);
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'], session: false }));
+router.post('/register', authLimiter, resolveTenant, validate(registerSchema), register);
+router.post('/login', authLimiter, resolveTenant, validate(loginSchema), login);
+router.get(
+  '/google',
+  resolveTenant,
+  // Google's OAuth redirect round-trip can't carry req.tenantId through as
+  // Express state, so it's smuggled in the `state` param and read back out
+  // in the callback below.
+  (req, res, next) =>
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+      session: false,
+      state: req.tenantId,
+    })(req, res, next)
+);
 router.get(
   '/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: `${env.FRONTEND_URL}/login?error=google` }),
@@ -38,6 +51,7 @@ router.post('/logout', protect, logout);
 router.post(
   '/forgot-password',
   authLimiter,
+  resolveTenant,
   validate(forgotPasswordSchema),
   forgotPassword
 );

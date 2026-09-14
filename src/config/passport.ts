@@ -9,19 +9,30 @@ passport.use(
       clientID: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
       callbackURL: env.GOOGLE_CALLBACK_URL,
+      passReqToCallback: true,
     },
-    async (_accessToken, _refreshToken, profile, done) => {
+    async (req, _accessToken, _refreshToken, profile, done) => {
       try {
+        // Smuggled through the OAuth round-trip via the `state` param — see
+        // auth.routes.ts, where resolveTenant sets it before the redirect
+        // to Google. Without this, the callback would have no way to know
+        // which tenant the login started from.
+        const tenantId = req.query.state as string | undefined;
+        if (!tenantId) {
+          return done(new Error('Missing tenant context for Google sign-in'));
+        }
+
         const email = profile.emails?.[0]?.value?.toLowerCase();
         if (!email) {
           return done(new Error('Google account has no email'));
         }
 
-        let user = await User.findOne({ googleId: profile.id });
+        let user = await User.findOne({ tenantId, googleId: profile.id });
         if (user) return done(null, user);
 
-        // Link to an existing email/password account if one already exists.
-        user = await User.findOne({ email });
+        // Link to an existing email/password account if one already exists
+        // within this same tenant.
+        user = await User.findOne({ tenantId, email });
         if (user) {
           user.googleId = profile.id;
           if (!user.isEmailVerified) user.isEmailVerified = true;
@@ -30,6 +41,7 @@ passport.use(
         }
 
         user = await User.create({
+          tenantId,
           email,
           googleId: profile.id,
           role: 'student',

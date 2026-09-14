@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import env from '../config/env';
 
 export interface IUser extends Document {
+  tenantId: mongoose.Types.ObjectId;
   email: string;
   password?: string;
   googleId?: string;
@@ -24,10 +25,15 @@ export interface IUser extends Document {
 
 const userSchema = new Schema<IUser>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: [true, 'Tenant is required'],
+      index: true,
+    },
     email: {
       type: String,
       required: [true, 'Email is required'],
-      unique: true,
       lowercase: true,
       trim: true,
       match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email'],
@@ -45,8 +51,6 @@ const userSchema = new Schema<IUser>(
     },
     googleId: {
       type: String,
-      unique: true,
-      sparse: true,
     },
     name: {
       type: String,
@@ -92,7 +96,7 @@ userSchema.methods.comparePassword = async function (
 // Generate JWT token
 userSchema.methods.generateAuthToken = function (): string {
   return jwt.sign(
-    { id: this._id, role: this.role },
+    { id: this._id, role: this.role, tenantId: this.tenantId.toString() },
     env.JWT_SECRET,
     { expiresIn: env.JWT_EXPIRES_IN as any }
   );
@@ -109,7 +113,13 @@ userSchema.methods.generatePasswordResetToken = function (): string {
   return resetToken;
 };
 
-// Note: email index is created automatically via unique:true in schema definition
+// Email is unique per tenant, not globally — two different institutes can
+// each have their own admin@theirdomain.com.
+userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
+// Same for googleId: scoped per tenant so the same real Google account can
+// hold a separate identity in each tenant it signs into, rather than one
+// tenant's login silently resolving to another tenant's account/data.
+userSchema.index({ tenantId: 1, googleId: 1 }, { unique: true, sparse: true });
 
 const User = mongoose.model<IUser>('User', userSchema);
 export default User;

@@ -39,9 +39,10 @@ const setAuthCookie = (res: Response, token: string): void => {
 export const register = asyncHandler(
   async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
     const { email, password, role } = req.body;
+    const tenantId = req.tenantId!;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    // Check if user already exists within this tenant
+    const existingUser = await User.findOne({ tenantId, email });
     if (existingUser) {
       throw new ConflictError('An account with this email already exists');
     }
@@ -50,6 +51,7 @@ export const register = asyncHandler(
     const userRole = role === 'admin' ? 'student' : (role || 'student');
 
     const user = await User.create({
+      tenantId,
       email,
       password,
       role: userRole,
@@ -90,8 +92,10 @@ export const login = asyncHandler(
   async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
     const { email, password } = req.body;
 
-    // Find user with password field
-    const user = await User.findOne({ email }).select('+password');
+    // Find user with password field, scoped to the tenant this login page
+    // resolves to — the same email can belong to a different account in
+    // another tenant.
+    const user = await User.findOne({ tenantId: req.tenantId, email }).select('+password');
     if (!user) {
       throw new UnauthorizedError('Invalid email or password');
     }
@@ -166,7 +170,7 @@ export const forgotPassword = asyncHandler(
   async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
     const { email } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ tenantId: req.tenantId, email });
     if (!user) {
       // Don't reveal if email exists
       sendResponse(res, {

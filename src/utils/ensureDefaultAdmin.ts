@@ -1,4 +1,5 @@
 import User from '../models/User';
+import Tenant from '../models/Tenant';
 import env from '../config/env';
 
 const ensureDefaultAdmin = async (): Promise<void> => {
@@ -10,7 +11,24 @@ const ensureDefaultAdmin = async (): Promise<void> => {
     return;
   }
 
-  const existingAdmin = await User.findOne({ email });
+  // Fresh install (new dev machine, CI DB) may not have run
+  // migrateDefaultTenant.ts yet, so guarantee the default tenant exists here
+  // too rather than depending on migration order.
+  const tenant = await Tenant.findOneAndUpdate(
+    { slug: env.DEFAULT_TENANT_SLUG },
+    {
+      $setOnInsert: {
+        slug: env.DEFAULT_TENANT_SLUG,
+        name: 'WebiGeeks',
+        contactPhone: env.CONTACT_PHONE,
+        contactEmail: env.CONTACT_EMAIL,
+        address: 'M-18, Ground Floor, Old DLF Colony, Sector-14, Gurugram, Haryana',
+      },
+    },
+    { upsert: true, new: true, runValidators: true }
+  );
+
+  const existingAdmin = await User.findOne({ tenantId: tenant._id, email });
   if (existingAdmin) {
     if (existingAdmin.role !== 'admin') {
       existingAdmin.role = 'admin';
@@ -22,6 +40,7 @@ const ensureDefaultAdmin = async (): Promise<void> => {
   }
 
   await User.create({
+    tenantId: tenant._id,
     email,
     password,
     role: 'admin',

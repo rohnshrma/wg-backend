@@ -15,6 +15,7 @@ import settingsRoutes from './settings.routes';
 import enquiryRoutes from './enquiry.routes';
 import userRoutes from './user.routes';
 import webhookRoutes from './webhook.routes';
+import tenantRoutes from './tenant.routes';
 
 const router = Router();
 
@@ -34,5 +35,6 @@ router.use('/settings', settingsRoutes);
 router.use('/enquiries', enquiryRoutes);
 router.use('/users', userRoutes);
 router.use('/webhooks', webhookRoutes);
+router.use('/tenant', tenantRoutes);
 
 export default router;

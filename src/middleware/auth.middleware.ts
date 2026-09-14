@@ -12,12 +12,16 @@ declare global {
   namespace Express {
     // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- extension point, not meant to add members here
     interface User extends IUser {}
+    interface Request {
+      tenantId?: string;
+    }
   }
 }
 
 interface JwtPayload {
   id: string;
   role: string;
+  tenantId: string;
 }
 
 /**
@@ -58,7 +62,11 @@ export const protect = async (
       throw new UnauthorizedError('Your account has been deactivated');
     }
 
+    // Trust the DB record, not the token, as the source of truth for tenant
+    // membership — a token signed before a (hypothetical future) tenant
+    // reassignment must not keep scoping queries to the old tenant.
     req.user = user;
+    req.tenantId = user.tenantId.toString();
     next();
   } catch (error) {
     if (error instanceof UnauthorizedError) {

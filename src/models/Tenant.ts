@@ -52,9 +52,12 @@ const tenantSchema = new Schema<ITenant>(
       trim: true,
     },
     colors: {
+      // Matches WebiGeeks' actual brand palette (wg-frontend globals.css
+      // --color-primary/-secondary/-accent) so the default tenant's theme
+      // stays pixel-identical to the site's current look.
       primary: { type: String, default: '#1672B8' },
-      secondary: { type: String, default: '#0F172A' },
-      accent: { type: String, default: '#F59E0B' },
+      secondary: { type: String, default: '#606062' },
+      accent: { type: String, default: '#F97316' },
     },
     contactPhone: {
       type: String,

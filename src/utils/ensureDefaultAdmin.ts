@@ -23,6 +23,7 @@ const ensureDefaultAdmin = async (): Promise<void> => {
         contactPhone: env.CONTACT_PHONE,
         contactEmail: env.CONTACT_EMAIL,
         address: 'M-18, Ground Floor, Old DLF Colony, Sector-14, Gurugram, Haryana',
+        colors: { primary: '#1672B8', secondary: '#606062', accent: '#F97316' },
       },
     },
     { upsert: true, new: true, runValidators: true }

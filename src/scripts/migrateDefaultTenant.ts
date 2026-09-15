@@ -39,6 +39,9 @@ async function migrate() {
         contactPhone: settings?.contactPhone || env.CONTACT_PHONE,
         contactEmail: settings?.contactEmail || env.CONTACT_EMAIL,
         address: settings?.address || 'M-18, Ground Floor, Old DLF Colony, Sector-14, Gurugram, Haryana',
+        // Set explicitly rather than relying on schema defaults applying on
+        // upsert — matches wg-frontend's actual brand palette.
+        colors: { primary: '#1672B8', secondary: '#606062', accent: '#F97316' },
       },
     },
     { upsert: true, new: true, runValidators: true }

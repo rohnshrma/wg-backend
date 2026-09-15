@@ -307,6 +307,7 @@ export const updateStudent = asyncHandler(
     // Notify student if admin made the update
     if (isAdminUpdate && student.userId) {
       await Notification.create({
+        tenantId: req.tenantId,
         recipientId: student.userId,
         title: 'Profile Updated',
         message: 'Your profile has been updated by the admin.',

@@ -119,7 +119,17 @@ userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 // Same for googleId: scoped per tenant so the same real Google account can
 // hold a separate identity in each tenant it signs into, rather than one
 // tenant's login silently resolving to another tenant's account/data.
-userSchema.index({ tenantId: 1, googleId: 1 }, { unique: true, sparse: true });
+// A plain `sparse: true` compound index is NOT enough here: Mongo only
+// excludes a document from a *compound* sparse index when EVERY indexed
+// field is missing, and `tenantId` is always present — so every user
+// without a googleId still gets indexed as {tenantId, googleId: undefined},
+// and the second such user in the same tenant collides. A partial index
+// keyed on googleId actually existing is the correct way to make this
+// unique-only-when-set.
+userSchema.index(
+  { tenantId: 1, googleId: 1 },
+  { unique: true, partialFilterExpression: { googleId: { $exists: true } } }
+);
 
 const User = mongoose.model<IUser>('User', userSchema);
 export default User;

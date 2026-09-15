@@ -3,10 +3,22 @@ import app from '../src/app';
 import User from '../src/models/User';
 import Lead from '../src/models/Lead';
 import Enquiry from '../src/models/Enquiry';
+import { ITenant } from '../src/models/Tenant';
 import { connectTestDB, clearTestDB, disconnectTestDB } from './setup/db';
+import { seedTestTenant } from './setup/tenant';
+
+let tenant: ITenant;
 
 beforeAll(async () => {
   await connectTestDB();
+});
+
+beforeEach(async () => {
+  // POST /api/leads is public and goes through resolveTenant, which falls
+  // back to DEFAULT_TENANT_SLUG when there's no Host match — this is what
+  // seedTestTenant() seeds, so the request resolves to it without the test
+  // needing to know the tenant id ahead of time.
+  tenant = await seedTestTenant();
 });
 
 afterEach(async () => {
@@ -41,17 +53,24 @@ async function waitFor(check: () => Promise<boolean>, timeoutMs = 2000): Promise
 
 describe('public lead submission syncs into the enquiry pipeline', () => {
   it('creates a Lead and mirrors it into Enquiry, owned by the earliest active admin', async () => {
-    const admin = await User.create({ email: 'admin@example.com', password: 'Password123', role: 'admin' });
+    const admin = await User.create({
+      tenantId: tenant._id,
+      email: 'admin@example.com',
+      password: 'Password123',
+      role: 'admin',
+    });
 
     const res = await request(app).post('/api/leads').send(validSubmission());
     expect(res.status).toBe(201);
 
     const lead = await Lead.findOne({ phone: '9876543210' });
     expect(lead).not.toBeNull();
+    expect(String(lead?.tenantId)).toBe(String(tenant._id));
 
     await waitFor(async () => (await Enquiry.exists({ mobile: '9876543210' })) !== null);
     const enquiry = await Enquiry.findOne({ mobile: '9876543210' });
     expect(enquiry).not.toBeNull();
+    expect(String(enquiry?.tenantId)).toBe(String(tenant._id));
     expect(enquiry?.stage).toBe('new_enquiry');
     expect(enquiry?.source).toBe('website');
     expect(enquiry?.name).toBe('Rahul Sharma');
@@ -63,7 +82,7 @@ describe('public lead submission syncs into the enquiry pipeline', () => {
   });
 
   it('sanitizes a phone number with a country code / formatting before syncing', async () => {
-    await User.create({ email: 'admin@example.com', password: 'Password123', role: 'admin' });
+    await User.create({ tenantId: tenant._id, email: 'admin@example.com', password: 'Password123', role: 'admin' });
 
     const res = await request(app)
       .post('/api/leads')
@@ -76,8 +95,9 @@ describe('public lead submission syncs into the enquiry pipeline', () => {
   });
 
   it('does not create a duplicate enquiry when an active one already exists for that mobile', async () => {
-    const admin = await User.create({ email: 'admin@example.com', password: 'Password123', role: 'admin' });
+    const admin = await User.create({ tenantId: tenant._id, email: 'admin@example.com', password: 'Password123', role: 'admin' });
     await Enquiry.create({
+      tenantId: tenant._id,
       name: 'Existing',
       course: 'Data Analytics',
       mobile: '9876543210',
@@ -112,5 +132,49 @@ describe('public lead submission syncs into the enquiry pipeline', () => {
 
     const enquiry = await Enquiry.findOne({ mobile: '9876543210' });
     expect(enquiry).toBeNull();
+  });
+
+  it('does not leak across tenants: a duplicate in another tenant does not block sync, and the synced enquiry is never owned by another tenant\'s admin', async () => {
+    // Tenant B has an active enquiry for the same mobile number, and an
+    // admin who (by construction) is the earliest-created admin overall.
+    // If the sync's queries weren't tenant-scoped, this admin could
+    // wrongly become the owner, or the tenant-B enquiry could wrongly
+    // count as an existing duplicate and suppress tenant A's sync.
+    const tenantB = await seedTestTenant({ slug: 'tenant-b', contactEmail: 'tenant-b@example.com' });
+    const otherAdmin = await User.create({
+      tenantId: tenantB._id,
+      email: 'other-admin@example.com',
+      password: 'Password123',
+      role: 'admin',
+    });
+    await Enquiry.create({
+      tenantId: tenantB._id,
+      name: 'Cross Tenant',
+      course: 'Data Analytics',
+      mobile: '9876543210',
+      source: 'justdial',
+      stage: 'follow_up',
+      owner: otherAdmin._id,
+      createdBy: otherAdmin._id,
+      stageHistory: [{ fromStage: null, toStage: 'follow_up', changedBy: otherAdmin._id, changedAt: new Date() }],
+    });
+
+    // Tenant A's own admin is created after tenant B's, so an unscoped
+    // "earliest active admin" lookup would pick otherAdmin instead.
+    const ownAdmin = await User.create({
+      tenantId: tenant._id,
+      email: 'admin@example.com',
+      password: 'Password123',
+      role: 'admin',
+    });
+
+    const res = await request(app).post('/api/leads').send(validSubmission());
+    expect(res.status).toBe(201);
+
+    await waitFor(async () => (await Enquiry.countDocuments({ mobile: '9876543210' })) === 2);
+    const ownEnquiry = await Enquiry.findOne({ tenantId: tenant._id, mobile: '9876543210' });
+    expect(ownEnquiry).not.toBeNull();
+    expect(String(ownEnquiry?.owner)).toBe(String(ownAdmin._id));
+    expect(String(ownEnquiry?.owner)).not.toBe(String(otherAdmin._id));
   });
 });

@@ -2,6 +2,13 @@
 
 Notable changes to the backend. Full context and rationale for each entry lives in `ROADMAP.md`; this file is a scannable index.
 
+## 2026-09-15
+
+- **Bug fix**: website leads never appeared in the admin "Enquiry Pipeline" — `Lead` (what every public form writes) and `Enquiry` (what the pipeline reads) were two separate models with no sync between them. `POST /api/leads` now auto-creates a matching `Enquiry` (source `website`, owned by the earliest active admin, skips if an active enquiry for that mobile already exists).
+- Raised `inquiryLimiter` from an undocumented 5/hour to 30/hour per IP — 5 was silently exhausted by normal multi-form browsing.
+- Fixed a `Lead.source` TS-interface/enum drift (`'sticky_cta'` was missing from the interface only).
+- See `ROADMAP.md` "Enquiry Pipeline never received website leads" for full detail, including production verification steps.
+
 ## 2026-08-19
 
 - **Bug fix**: CORS allowlist didn't include the new `webigeeks.in` ads domain — every real browser lead submission from it failed with a 500 (`curl`/Postman testing couldn't catch this since those send no `Origin` header). Added `https://webigeeks.in` / `https://www.webigeeks.in` to `allowedOrigins` in `app.ts`.

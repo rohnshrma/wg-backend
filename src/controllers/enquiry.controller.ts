@@ -9,9 +9,18 @@ import { getPagination } from '../utils/helpers';
 /**
  * Counsellors only ever see and touch their own enquiries; admins see everything.
  * Every read/write path funnels through this so the rule can't drift between routes.
+ * tenantId is cast to an actual ObjectId (not left as the raw string from
+ * req.tenantId) because this scope also feeds `.aggregate()` pipelines in
+ * getEnquiryStats below — `.find()`/`.countDocuments()` auto-cast query
+ * values against the schema, but a raw aggregation `$match` does not, so a
+ * string tenantId there would silently match zero documents.
  */
-const scopeToUser = (req: Request): Record<string, unknown> =>
-  req.user!.role === 'admin' ? {} : { owner: req.user!._id };
+const scopeToUser = (req: Request): Record<string, unknown> => {
+  const tenantId = new mongoose.Types.ObjectId(req.tenantId);
+  return req.user!.role === 'admin'
+    ? { tenantId }
+    : { tenantId, owner: req.user!._id };
+};
 
 const assertCanMutate = (req: Request, enquiry: { owner: mongoose.Types.ObjectId }): void => {
   if (req.user!.role === 'admin') return;
@@ -40,6 +49,7 @@ export const createEnquiry = asyncHandler(
     const ownerId = req.user!.role === 'admin' && owner ? owner : req.user!._id;
 
     const duplicate = await Enquiry.findOne({
+      tenantId: req.tenantId,
       mobile: rest.mobile,
       stage: { $nin: ['admitted', 'cancelled'] },
     });
@@ -51,6 +61,7 @@ export const createEnquiry = asyncHandler(
 
     const enquiry = await Enquiry.create({
       ...rest,
+      tenantId: req.tenantId,
       owner: ownerId,
       createdBy: req.user!._id,
       enquiryDate: enquiryDate || new Date(),
@@ -153,7 +164,7 @@ export const getEnquiryById = asyncHandler(
  */
 export const updateEnquiry = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const enquiry = await Enquiry.findById(req.params.id);
+    const enquiry = await Enquiry.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!enquiry) throw new NotFoundError('Enquiry not found');
     assertCanMutate(req, enquiry);
 
@@ -193,7 +204,7 @@ export const moveEnquiryStage = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { stage, note } = req.body;
 
-    const enquiry = await Enquiry.findById(req.params.id);
+    const enquiry = await Enquiry.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!enquiry) throw new NotFoundError('Enquiry not found');
     assertCanMutate(req, enquiry);
 
@@ -226,7 +237,7 @@ export const moveEnquiryStage = asyncHandler(
  */
 export const deleteEnquiry = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const enquiry = await Enquiry.findByIdAndDelete(req.params.id);
+    const enquiry = await Enquiry.findOneAndDelete({ _id: req.params.id, tenantId: req.tenantId });
     if (!enquiry) throw new NotFoundError('Enquiry not found');
 
     sendResponse(res, { message: 'Enquiry deleted' });

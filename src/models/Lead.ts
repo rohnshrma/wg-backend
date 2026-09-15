@@ -7,6 +7,7 @@ export interface ILeadNote {
 }
 
 export interface ILead extends Document {
+  tenantId: mongoose.Types.ObjectId;
   name: string;
   phone: string;
   email: string;
@@ -33,6 +34,12 @@ export interface ILead extends Document {
 
 const leadSchema = new Schema<ILead>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     name: {
       type: String,
       required: [true, 'Name is required'],

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Student from '../models/Student';
 import Lead from '../models/Lead';
 import Payment from '../models/Payment';
@@ -13,27 +14,35 @@ const fillMonths = <T extends Record<string, unknown>>(
   });
 };
 
-export const getOverview = async () => {
+// Every aggregation below is scoped to a single tenant via a leading
+// tenantId $match — these power admin-only analytics, and without this a
+// tenant's admin could see another tenant's revenue/student/lead figures.
+const tenantMatch = (tenantId: string) => ({
+  $match: { tenantId: new mongoose.Types.ObjectId(tenantId) },
+});
+
+export const getOverview = async (tenantId: string) => {
   const [totalStudents, totalLeads, pendingAdmissions, totalCourses] = await Promise.all([
-    Student.countDocuments({ status: 'approved' }),
-    Lead.countDocuments(),
-    Student.countDocuments({ status: 'pending' }),
-    Course.countDocuments({ isActive: true }),
+    Student.countDocuments({ tenantId, status: 'approved' }),
+    Lead.countDocuments({ tenantId }),
+    Student.countDocuments({ tenantId, status: 'pending' }),
+    Course.countDocuments({ tenantId, isActive: true }),
   ]);
 
   const revenueResult = await Payment.aggregate([
+    tenantMatch(tenantId),
     { $group: { _id: null, totalRevenue: { $sum: '$amount' } } },
   ]);
   const totalRevenue = revenueResult[0]?.totalRevenue || 0;
 
   const pendingFeesResult = await Student.aggregate([
-    { $match: { status: 'approved' } },
+    { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: 'approved' } },
     { $group: { _id: null, totalPending: { $sum: '$pendingAmount' } } },
   ]);
   const pendingFees = pendingFeesResult[0]?.totalPending || 0;
 
   const courseWiseStudents = await Student.aggregate([
-    { $match: { status: 'approved' } },
+    { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: 'approved' } },
     { $group: { _id: '$courseId', count: { $sum: 1 } } },
     { $lookup: { from: 'courses', localField: '_id', foreignField: '_id', as: 'course' } },
     { $unwind: '$course' },
@@ -52,10 +61,11 @@ export const getOverview = async () => {
   };
 };
 
-export const getMonthlyAdmissions = async (year: number) => {
+export const getMonthlyAdmissions = async (tenantId: string, year: number) => {
   const data = await Student.aggregate([
     {
       $match: {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
         status: 'approved',
         approvedAt: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year + 1}-01-01`) },
       },
@@ -67,10 +77,11 @@ export const getMonthlyAdmissions = async (year: number) => {
   return fillMonths(data, (month, found) => ({ month, count: (found?.count as number) || 0 }));
 };
 
-export const getMonthlyRevenue = async (year: number) => {
+export const getMonthlyRevenue = async (tenantId: string, year: number) => {
   const data = await Payment.aggregate([
     {
       $match: {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
         paymentDate: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year + 1}-01-01`) },
       },
     },
@@ -81,10 +92,11 @@ export const getMonthlyRevenue = async (year: number) => {
   return fillMonths(data, (month, found) => ({ month, total: (found?.total as number) || 0 }));
 };
 
-export const getRevenueByPaymentMethod = async (year: number) => {
+export const getRevenueByPaymentMethod = async (tenantId: string, year: number) => {
   const byPaymentMethod = await Payment.aggregate([
     {
       $match: {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
         paymentDate: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year + 1}-01-01`) },
       },
     },
@@ -99,18 +111,19 @@ export const getRevenueByPaymentMethod = async (year: number) => {
   }));
 };
 
-export const getLeadAnalytics = async (year: number) => {
+export const getLeadAnalytics = async (tenantId: string, year: number) => {
   const [total, converted, bySource] = await Promise.all([
-    Lead.countDocuments(),
-    Lead.countDocuments({ status: 'converted' }),
+    Lead.countDocuments({ tenantId }),
+    Lead.countDocuments({ tenantId, status: 'converted' }),
     Lead.aggregate([
+      tenantMatch(tenantId),
       { $group: { _id: '$source', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]),
   ]);
 
   const convertedBySource = await Lead.aggregate([
-    { $match: { status: 'converted' } },
+    { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: 'converted' } },
     { $group: { _id: '$source', converted: { $sum: 1 } } },
   ]);
 
@@ -128,6 +141,7 @@ export const getLeadAnalytics = async (year: number) => {
   const monthlyTrend = await Lead.aggregate([
     {
       $match: {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
         createdAt: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year + 1}-01-01`) },
       },
     },
@@ -157,35 +171,37 @@ export const getLeadAnalytics = async (year: number) => {
   };
 };
 
-export const getCoursePopularity = async () => {
+export const getCoursePopularity = async (tenantId: string) => {
   return Lead.aggregate([
+    tenantMatch(tenantId),
     { $group: { _id: '$courseInterested', inquiries: { $sum: 1 } } },
     { $sort: { inquiries: -1 } },
     { $limit: 10 },
   ]);
 };
 
-export const getStudentAnalytics = async (year: number) => {
+export const getStudentAnalytics = async (tenantId: string, year: number) => {
   const [statusBreakdown, paymentModeBreakdown, genderBreakdown] = await Promise.all([
-    Student.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+    Student.aggregate([tenantMatch(tenantId), { $group: { _id: '$status', count: { $sum: 1 } } }]),
     Student.aggregate([
-      { $match: { status: 'approved' } },
+      { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: 'approved' } },
       { $group: { _id: '$paymentMode', count: { $sum: 1 } } },
     ]),
     Student.aggregate([
-      { $match: { status: 'approved' } },
+      { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: 'approved' } },
       { $group: { _id: '$gender', count: { $sum: 1 } } },
     ]),
   ]);
 
   const duesResult = await Student.aggregate([
-    { $match: { status: 'approved', pendingAmount: { $gt: 0 } } },
+    { $match: { tenantId: new mongoose.Types.ObjectId(tenantId), status: 'approved', pendingAmount: { $gt: 0 } } },
     { $group: { _id: null, studentsWithDues: { $sum: 1 }, totalDue: { $sum: '$pendingAmount' } } },
   ]);
 
   const enrollmentTrend = await Student.aggregate([
     {
       $match: {
+        tenantId: new mongoose.Types.ObjectId(tenantId),
         createdAt: { $gte: new Date(`${year}-01-01`), $lt: new Date(`${year + 1}-01-01`) },
       },
     },

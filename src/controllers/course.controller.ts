@@ -13,7 +13,7 @@ import { NotFoundError, ConflictError } from '../utils/apiError';
 export const getAllCourses = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const { featured, level, mode, search } = req.query;
-    const query: Record<string, any> = { isActive: true };
+    const query: Record<string, any> = { tenantId: req.tenantId, isActive: true };
 
     if (featured === 'true') query.isFeatured = true;
     if (level) query.level = level;
@@ -45,6 +45,7 @@ export const getAllCourses = asyncHandler(
 export const getCourseBySlug = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const course = await Course.findOne({
+      tenantId: req.tenantId,
       slug: req.params.slug,
       isActive: true,
     });
@@ -61,8 +62,8 @@ export const getCourseBySlug = asyncHandler(
  * @access  Admin
  */
 export const getAllCoursesAdmin = asyncHandler(
-  async (_req: Request, res: Response): Promise<void> => {
-    const courses = await Course.find().sort({ displayOrder: 1, createdAt: -1 });
+  async (req: Request, res: Response): Promise<void> => {
+    const courses = await Course.find({ tenantId: req.tenantId }).sort({ displayOrder: 1, createdAt: -1 });
 
     sendResponse(res, {
       message: 'Courses fetched successfully',
@@ -78,7 +79,7 @@ export const getAllCoursesAdmin = asyncHandler(
  */
 export const getCourseByIdAdmin = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const course = await Course.findById(req.params.id);
+    const course = await Course.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!course) throw new NotFoundError('Course not found');
 
     sendResponse(res, { message: 'Course fetched', data: course });
@@ -95,13 +96,14 @@ export const createCourse = asyncHandler(
     // Generate slug from title
     let slug = generateSlug(req.body.title);
 
-    // Ensure slug is unique
-    const existing = await Course.findOne({ slug });
+    // Ensure slug is unique within this tenant — a different tenant may
+    // legitimately have the same course slug.
+    const existing = await Course.findOne({ slug, tenantId: req.tenantId });
     if (existing) {
       slug = `${slug}-${Date.now()}`;
     }
 
-    const course = await Course.create({ ...req.body, slug });
+    const course = await Course.create({ ...req.body, tenantId: req.tenantId, slug });
 
     sendResponse(res, {
       statusCode: 201,
@@ -121,9 +123,10 @@ export const updateCourse = asyncHandler(
     // If title changed, regenerate slug
     if (req.body.title) {
       req.body.slug = generateSlug(req.body.title);
-      // Check uniqueness
+      // Check uniqueness within this tenant
       const existing = await Course.findOne({
         slug: req.body.slug,
+        tenantId: req.tenantId,
         _id: { $ne: req.params.id },
       });
       if (existing) {
@@ -131,8 +134,8 @@ export const updateCourse = asyncHandler(
       }
     }
 
-    const course = await Course.findByIdAndUpdate(
-      req.params.id,
+    const course = await Course.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.tenantId },
       { $set: req.body },
       { new: true, runValidators: true }
     );
@@ -150,8 +153,8 @@ export const updateCourse = asyncHandler(
  */
 export const deleteCourse = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const course = await Course.findByIdAndUpdate(
-      req.params.id,
+    const course = await Course.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.tenantId },
       { isActive: false },
       { new: true }
     );

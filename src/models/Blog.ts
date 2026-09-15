@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IBlog extends Document {
+  tenantId: mongoose.Types.ObjectId;
   title: string;
   slug: string;
   excerpt: string;
@@ -22,6 +23,12 @@ export interface IBlog extends Document {
 
 const blogSchema = new Schema<IBlog>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     title: {
       type: String,
       required: [true, 'Blog title is required'],
@@ -29,7 +36,6 @@ const blogSchema = new Schema<IBlog>(
     },
     slug: {
       type: String,
-      unique: true,
       lowercase: true,
     },
     excerpt: {
@@ -78,7 +84,8 @@ const blogSchema = new Schema<IBlog>(
   }
 );
 
-// Note: slug index created automatically via unique:true
+// Slug is unique per tenant, not globally.
+blogSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
 blogSchema.index({ isPublished: 1, publishedAt: -1 });
 blogSchema.index({ category: 1 });
 

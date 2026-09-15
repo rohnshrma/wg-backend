@@ -37,12 +37,15 @@ export const getPagination = (
 /**
  * Generate a slug that is unique for the given mongoose model, appending a
  * numeric suffix on collision (my-post, my-post-2, my-post-3, ...).
- * `excludeId` lets an update keep its own slug.
+ * `excludeId` lets an update keep its own slug. `scopeFilter` narrows the
+ * uniqueness check (e.g. { tenantId }) so a slug only needs to be unique
+ * within that scope, not globally.
  */
 export const generateUniqueSlug = async (
   model: { exists: (filter: Record<string, unknown>) => Promise<unknown> },
   text: string,
-  excludeId?: string
+  excludeId?: string,
+  scopeFilter?: Record<string, unknown>
 ): Promise<string> => {
   const base = generateSlug(text) || 'untitled';
   let slug = base;
@@ -50,7 +53,7 @@ export const generateUniqueSlug = async (
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const filter: Record<string, unknown> = { slug };
+    const filter: Record<string, unknown> = { slug, ...scopeFilter };
     if (excludeId) filter._id = { $ne: excludeId };
     const clash = await model.exists(filter);
     if (!clash) return slug;

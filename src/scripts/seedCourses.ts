@@ -7,6 +7,7 @@
 import mongoose from 'mongoose';
 import env from '../config/env';
 import Course from '../models/Course';
+import Tenant from '../models/Tenant';
 
 const PLACEHOLDER_THUMBNAIL = '/images/course-placeholder.svg';
 
@@ -344,11 +345,21 @@ async function seed() {
   await mongoose.connect(env.MONGODB_URI);
   console.log('Connected to MongoDB. Seeding courses...');
 
+  // This script seeds the original, single-tenant WebiGeeks catalogue —
+  // always into the default tenant so existing behavior is unchanged.
+  const tenant = await Tenant.findOne({ slug: env.DEFAULT_TENANT_SLUG });
+  if (!tenant) {
+    throw new Error(
+      `No tenant found for slug "${env.DEFAULT_TENANT_SLUG}" — run migrateDefaultTenant first.`
+    );
+  }
+
   for (const c of courses) {
     await Course.findOneAndUpdate(
-      { slug: c.slug },
+      { slug: c.slug, tenantId: tenant._id },
       {
         $set: {
+          tenantId: tenant._id,
           title: c.title,
           shortDescription: c.shortDescription,
           fullDescription: c.fullDescription,

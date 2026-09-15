@@ -7,12 +7,20 @@ import Course from '../src/models/Course';
 import Mandate from '../src/models/Mandate';
 import Installment from '../src/models/Installment';
 import Payment from '../src/models/Payment';
+import { ITenant } from '../src/models/Tenant';
 import { connectTestDB, clearTestDB, disconnectTestDB } from './setup/db';
+import { seedTestTenant } from './setup/tenant';
 
 const WEBHOOK_SECRET = process.env.RAZORPAY_WEBHOOK_SECRET as string;
 
+let tenant: ITenant;
+
 beforeAll(async () => {
   await connectTestDB();
+});
+
+beforeEach(async () => {
+  tenant = await seedTestTenant();
 });
 
 afterEach(async () => {
@@ -37,6 +45,7 @@ async function postWebhook(payload: Record<string, unknown>, opts: { signature?:
 
 async function setupStudentWithMandate(overrides: Record<string, unknown> = {}) {
   const course = await Course.create({
+    tenantId: tenant._id,
     title: 'Full Stack Development',
     shortDescription: 'Learn full stack development',
     fullDescription: 'Learn full stack development in depth',
@@ -45,8 +54,9 @@ async function setupStudentWithMandate(overrides: Record<string, unknown> = {}) 
     fees: 30000,
   });
 
-  const user = await User.create({ email: 'student@example.com', password: 'Password123', role: 'student' });
+  const user = await User.create({ tenantId: tenant._id, email: 'student@example.com', password: 'Password123', role: 'student' });
   const student = await Student.create({
+    tenantId: tenant._id,
     userId: user._id,
     courseId: course._id,
     fullName: 'Rahul Sharma',
@@ -66,6 +76,7 @@ async function setupStudentWithMandate(overrides: Record<string, unknown> = {}) 
   });
 
   const mandate = await Mandate.create({
+    tenantId: tenant._id,
     studentId: student._id,
     courseId: course._id,
     razorpayPlanId: 'plan_test123',
@@ -80,6 +91,7 @@ async function setupStudentWithMandate(overrides: Record<string, unknown> = {}) 
   });
 
   const installment = await Installment.create({
+    tenantId: tenant._id,
     studentId: student._id,
     installmentNumber: 1,
     amount: 10000,

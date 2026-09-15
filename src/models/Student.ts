@@ -8,6 +8,7 @@ export interface IAddress {
 }
 
 export interface IStudent extends Document {
+  tenantId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   admissionId?: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -56,6 +57,12 @@ export interface IStudent extends Document {
 
 const studentSchema = new Schema<IStudent>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     userId: {
       type: Schema.Types.ObjectId,
       ref: 'User',

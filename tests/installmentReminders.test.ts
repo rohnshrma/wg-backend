@@ -1,12 +1,20 @@
 import User from '../src/models/User';
 import Student from '../src/models/Student';
 import Installment from '../src/models/Installment';
+import { ITenant } from '../src/models/Tenant';
 import { NotificationService } from '../src/services/notificationService';
 import { runInstallmentReminders } from '../src/jobs/installmentReminders';
 import { connectTestDB, clearTestDB, disconnectTestDB } from './setup/db';
+import { seedTestTenant } from './setup/tenant';
+
+let tenant: ITenant;
 
 beforeAll(async () => {
   await connectTestDB();
+});
+
+beforeEach(async () => {
+  tenant = await seedTestTenant();
 });
 
 afterEach(async () => {
@@ -19,8 +27,9 @@ afterAll(async () => {
 });
 
 async function createStudent() {
-  const user = await User.create({ email: 'student@example.com', password: 'Password123', role: 'student' });
+  const user = await User.create({ tenantId: tenant._id, email: 'student@example.com', password: 'Password123', role: 'student' });
   return Student.create({
+    tenantId: tenant._id,
     userId: user._id,
     fullName: 'Rahul Sharma',
     dateOfBirth: '2000-01-01',
@@ -49,6 +58,7 @@ describe('installment reminders — AutoPay-aware branch', () => {
     const dueInTwoDays = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
 
     await Installment.create({
+      tenantId: tenant._id,
       studentId: student._id,
       installmentNumber: 1,
       amount: 10000,
@@ -74,6 +84,7 @@ describe('installment reminders — AutoPay-aware branch', () => {
     const dueInTwoDays = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
 
     await Installment.create({
+      tenantId: tenant._id,
       studentId: student._id,
       installmentNumber: 1,
       amount: 10000,
@@ -96,6 +107,7 @@ describe('installment reminders — AutoPay-aware branch', () => {
     const dueYesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     const installment = await Installment.create({
+      tenantId: tenant._id,
       studentId: student._id,
       installmentNumber: 1,
       amount: 10000,
@@ -121,6 +133,7 @@ describe('installment reminders — AutoPay-aware branch', () => {
     const dueInTwoDays = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
 
     await Installment.create({
+      tenantId: tenant._id,
       studentId: student._id,
       installmentNumber: 1,
       amount: 10000,

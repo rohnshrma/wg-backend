@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { protect, authorize } from '../middleware/auth.middleware';
+import { resolveTenant } from '../middleware/tenant.middleware';
 import {
   getAllCourses,
   getCourseBySlug,
@@ -20,7 +21,7 @@ router.put('/:id', protect, authorize('admin'), updateCourse);
 router.delete('/:id', protect, authorize('admin'), deleteCourse);
 
 // Public
-router.get('/', getAllCourses);
-router.get('/:slug', getCourseBySlug);
+router.get('/', resolveTenant, getAllCourses);
+router.get('/:slug', resolveTenant, getCourseBySlug);
 
 export default router;

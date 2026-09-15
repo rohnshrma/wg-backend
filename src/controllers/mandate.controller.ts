@@ -11,7 +11,7 @@ import { createSubscriptionMandate, cancelSubscriptionMandate } from '../service
 const assertOwnsStudentRecord = async (req: Request, studentId: string): Promise<void> => {
   if (req.user!.role === 'admin') return;
 
-  const student = await Student.findById(studentId).select('userId');
+  const student = await Student.findOne({ _id: studentId, tenantId: req.tenantId }).select('userId');
   if (!student) throw new NotFoundError('Student not found');
   if (student.userId.toString() !== req.user!._id.toString()) {
     throw new ForbiddenError('You can only view your own records');
@@ -49,20 +49,21 @@ export const createMandate = asyncHandler(async (req: Request, res: Response): P
 
   const { studentId, numberOfInstallments, startDate, period, interval } = req.body;
 
-  const student = await Student.findById(studentId).populate('courseId', 'title');
+  const student = await Student.findOne({ _id: studentId, tenantId: req.tenantId }).populate('courseId', 'title');
   if (!student) throw new NotFoundError('Student not found');
 
   if (student.pendingAmount <= 0) {
     throw new BadRequestError('Student has no pending balance to schedule');
   }
 
-  const existingInstallments = await Installment.countDocuments({ studentId: student._id });
+  const existingInstallments = await Installment.countDocuments({ studentId: student._id, tenantId: req.tenantId });
   if (existingInstallments > 0) {
     throw new BadRequestError('An installment plan already exists for this student');
   }
 
   const existingMandate = await Mandate.findOne({
     studentId: student._id,
+    tenantId: req.tenantId,
     status: { $in: ['created', 'authenticated', 'active', 'paused'] },
   });
   if (existingMandate) {
@@ -123,6 +124,7 @@ export const createMandate = asyncHandler(async (req: Request, res: Response): P
     (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || 'unknown';
 
   const mandate = await Mandate.create({
+    tenantId: req.tenantId,
     studentId: student._id,
     courseId: student.courseId,
     razorpayPlanId: planId,
@@ -147,6 +149,7 @@ export const createMandate = asyncHandler(async (req: Request, res: Response): P
 
   const installments = await Installment.insertMany(
     Array.from({ length: numberOfInstallments }, (_, i) => ({
+      tenantId: req.tenantId,
       studentId: student._id,
       installmentNumber: i + 1,
       amount: amountPerInstallment,
@@ -170,8 +173,8 @@ export const createMandate = asyncHandler(async (req: Request, res: Response): P
  * @route   GET /api/payments/mandates
  * @access  Admin
  */
-export const getAllMandates = asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-  const mandates = await Mandate.find()
+export const getAllMandates = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const mandates = await Mandate.find({ tenantId: req.tenantId })
     .populate('studentId', 'fullName admissionId')
     .sort({ createdAt: -1 });
 
@@ -186,7 +189,7 @@ export const getAllMandates = asyncHandler(async (_req: Request, res: Response):
 export const getStudentMandate = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   await assertOwnsStudentRecord(req, req.params.id as string);
 
-  const mandate = await Mandate.findOne({ studentId: req.params.id }).sort({ createdAt: -1 });
+  const mandate = await Mandate.findOne({ studentId: req.params.id, tenantId: req.tenantId }).sort({ createdAt: -1 });
 
   sendResponse(res, { message: 'Mandate fetched', data: mandate });
 });
@@ -197,7 +200,7 @@ export const getStudentMandate = asyncHandler(async (req: Request, res: Response
  * @access  Admin
  */
 export const cancelMandate = asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const mandate = await Mandate.findById(req.params.id);
+  const mandate = await Mandate.findOne({ _id: req.params.id, tenantId: req.tenantId });
   if (!mandate) throw new NotFoundError('Mandate not found');
 
   if (mandate.status === 'cancelled') {

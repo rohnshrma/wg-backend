@@ -1,10 +1,18 @@
 import request from 'supertest';
 import app from '../src/app';
 import User from '../src/models/User';
+import { ITenant } from '../src/models/Tenant';
 import { connectTestDB, clearTestDB, disconnectTestDB } from './setup/db';
+import { seedTestTenant } from './setup/tenant';
+
+let tenant: ITenant;
 
 beforeAll(async () => {
   await connectTestDB();
+});
+
+beforeEach(async () => {
+  tenant = await seedTestTenant();
 });
 
 afterEach(async () => {
@@ -93,7 +101,7 @@ describe('Auth', () => {
   });
 
   it('stores passwords hashed, never in plaintext', async () => {
-    const user = await User.create({ email: 'hash-check@example.com', password: 'Password123', role: 'student' });
+    const user = await User.create({ tenantId: tenant._id, email: 'hash-check@example.com', password: 'Password123', role: 'student' });
     expect(user.password).not.toBe('Password123');
   });
 });

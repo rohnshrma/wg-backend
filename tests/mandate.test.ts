@@ -3,7 +3,9 @@ import User from '../src/models/User';
 import Student from '../src/models/Student';
 import Mandate from '../src/models/Mandate';
 import Installment from '../src/models/Installment';
+import { ITenant } from '../src/models/Tenant';
 import { connectTestDB, clearTestDB, disconnectTestDB } from './setup/db';
+import { seedTestTenant } from './setup/tenant';
 
 jest.mock('../src/services/razorpayService', () => {
   const actual = jest.requireActual('../src/services/razorpayService');
@@ -23,8 +25,14 @@ const app = require('../src/app').default;
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const razorpayService = require('../src/services/razorpayService');
 
+let tenant: ITenant;
+
 beforeAll(async () => {
   await connectTestDB();
+});
+
+beforeEach(async () => {
+  tenant = await seedTestTenant();
 });
 
 afterEach(async () => {
@@ -36,15 +44,16 @@ afterAll(async () => {
 });
 
 async function adminAgent() {
-  await User.create({ email: 'admin@example.com', password: 'Password123', role: 'admin' });
+  await User.create({ tenantId: tenant._id, email: 'admin@example.com', password: 'Password123', role: 'admin' });
   const agent = request.agent(app);
   await agent.post('/api/auth/login').send({ email: 'admin@example.com', password: 'Password123' });
   return agent;
 }
 
 async function createStudent(overrides: Record<string, unknown> = {}) {
-  const user = await User.create({ email: 'student@example.com', password: 'Password123', role: 'student' });
+  const user = await User.create({ tenantId: tenant._id, email: 'student@example.com', password: 'Password123', role: 'student' });
   return Student.create({
+    tenantId: tenant._id,
     userId: user._id,
     fullName: 'Rahul Sharma',
     dateOfBirth: '2000-01-01',
@@ -165,7 +174,7 @@ describe('AutoPay mandate creation', () => {
       consentAccepted: true,
     });
 
-    await User.create({ email: 'other@example.com', password: 'Password123', role: 'student' });
+    await User.create({ tenantId: tenant._id, email: 'other@example.com', password: 'Password123', role: 'student' });
     const otherAgent = request.agent(app);
     await otherAgent.post('/api/auth/login').send({ email: 'other@example.com', password: 'Password123' });
 

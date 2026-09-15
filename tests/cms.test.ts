@@ -1,10 +1,18 @@
 import request from 'supertest';
 import app from '../src/app';
 import User from '../src/models/User';
+import { ITenant } from '../src/models/Tenant';
 import { connectTestDB, clearTestDB, disconnectTestDB } from './setup/db';
+import { seedTestTenant } from './setup/tenant';
+
+let tenant: ITenant;
 
 beforeAll(async () => {
   await connectTestDB();
+});
+
+beforeEach(async () => {
+  tenant = await seedTestTenant();
 });
 
 afterEach(async () => {
@@ -16,7 +24,7 @@ afterAll(async () => {
 });
 
 async function adminAgent() {
-  await User.create({ email: 'admin@example.com', password: 'Password123', role: 'admin' });
+  await User.create({ tenantId: tenant._id, email: 'admin@example.com', password: 'Password123', role: 'admin' });
   const agent = request.agent(app);
   await agent.post('/api/auth/login').send({ email: 'admin@example.com', password: 'Password123' });
   return agent;

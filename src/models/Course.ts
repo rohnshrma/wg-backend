@@ -16,6 +16,7 @@ export interface ICourseFAQ {
 }
 
 export interface ICourse extends Document {
+  tenantId: mongoose.Types.ObjectId;
   title: string;
   slug: string;
   shortDescription: string;
@@ -50,6 +51,12 @@ export interface ICourse extends Document {
 
 const courseSchema = new Schema<ICourse>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     title: {
       type: String,
       required: [true, 'Course title is required'],
@@ -57,7 +64,6 @@ const courseSchema = new Schema<ICourse>(
     },
     slug: {
       type: String,
-      unique: true,
       lowercase: true,
     },
     shortDescription: {
@@ -132,7 +138,9 @@ const courseSchema = new Schema<ICourse>(
 );
 
 // Indexes
-// Note: slug index created automatically via unique:true
+// Slug is unique per tenant, not globally — two different institutes can
+// each run their own "python-course" slug.
+courseSchema.index({ tenantId: 1, slug: 1 }, { unique: true });
 courseSchema.index({ isFeatured: 1, isActive: 1 });
 courseSchema.index({ displayOrder: 1 });
 

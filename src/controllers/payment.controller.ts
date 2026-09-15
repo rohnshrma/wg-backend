@@ -13,7 +13,7 @@ import { BadRequestError, ForbiddenError, NotFoundError } from '../utils/apiErro
 const assertOwnsStudentRecord = async (req: Request, studentId: string): Promise<void> => {
   if (req.user!.role === 'admin') return;
 
-  const student = await Student.findById(studentId).select('userId');
+  const student = await Student.findOne({ _id: studentId, tenantId: req.tenantId }).select('userId');
   if (!student) throw new NotFoundError('Student not found');
   if (student.userId.toString() !== req.user!._id.toString()) {
     throw new ForbiddenError('You can only view your own records');
@@ -62,6 +62,11 @@ export const recordPaymentAndNotify = async (params: {
   });
 
   const payment = await Payment.create({
+    // Derived from the student record (rather than threaded through every
+    // caller, including the Razorpay webhook which has no req/tenant
+    // context) — the student's own tenantId is always the source of truth
+    // for which tenant this payment belongs to.
+    tenantId: student.tenantId,
     studentId: student._id,
     courseId,
     amount,
@@ -134,8 +139,8 @@ const applyPaymentToInstallments = async (
 export const getAllPayments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { page, limit, skip } = getPagination(req.query.page, req.query.limit, 10);
 
-  const total = await Payment.countDocuments();
-  const payments = await Payment.find()
+  const total = await Payment.countDocuments({ tenantId: req.tenantId });
+  const payments = await Payment.find({ tenantId: req.tenantId })
     .populate('studentId', 'fullName admissionId')
     .populate('courseId', 'title')
     .populate('recordedBy', 'email')
@@ -155,8 +160,8 @@ export const getAllPayments = asyncHandler(async (req: Request, res: Response): 
  * @route   GET /api/payments/export
  * @access  Admin
  */
-export const exportPayments = asyncHandler(async (_req: Request, res: Response): Promise<void> => {
-  const payments = await Payment.find()
+export const exportPayments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const payments = await Payment.find({ tenantId: req.tenantId })
     .populate('studentId', 'fullName admissionId')
     .populate('courseId', 'title')
     .sort({ paymentDate: -1 });
@@ -191,7 +196,7 @@ export const exportPayments = asyncHandler(async (_req: Request, res: Response):
 export const getStudentPayments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   await assertOwnsStudentRecord(req, req.params.id as string);
 
-  const payments = await Payment.find({ studentId: req.params.id })
+  const payments = await Payment.find({ studentId: req.params.id, tenantId: req.tenantId })
     .populate('courseId', 'title')
     .sort({ paymentDate: -1 });
 
@@ -204,7 +209,7 @@ export const recordPayment = asyncHandler(async (req: Request, res: Response): P
   if (!amount || amount <= 0) throw new BadRequestError('Amount must be greater than 0');
   if (!paymentMethod) throw new BadRequestError('Payment method is required');
 
-  const student = await Student.findById(studentId).populate('courseId', 'title');
+  const student = await Student.findOne({ _id: studentId, tenantId: req.tenantId }).populate('courseId', 'title');
   if (!student) throw new NotFoundError('Student not found');
 
   if (amount > student.pendingAmount) {
@@ -252,7 +257,7 @@ export const sendPaymentReceipt = asyncHandler(async (req: Request, res: Respons
     throw new BadRequestError('channel must be "email" or "whatsapp"');
   }
 
-  const payment = await Payment.findById(req.params.id)
+  const payment = await Payment.findOne({ _id: req.params.id, tenantId: req.tenantId })
     .populate('studentId', 'fullName email studentContactNumber')
     .populate('courseId', 'title');
   if (!payment) throw new NotFoundError('Payment not found');
@@ -270,7 +275,7 @@ export const sendPaymentReceipt = asyncHandler(async (req: Request, res: Respons
 
   let receiptUrl: string | undefined = payment.receiptUrl;
   if (!receiptUrl) {
-    const studentDoc = await Student.findById(student._id);
+    const studentDoc = await Student.findOne({ _id: student._id, tenantId: req.tenantId });
     const generatedUrl = await generateAndUploadReceipt({
       receiptNumber: payment.receiptNumber,
       studentName: student.fullName,
@@ -314,7 +319,7 @@ export const sendPaymentReceipt = asyncHandler(async (req: Request, res: Respons
 export const getInstallments = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   await assertOwnsStudentRecord(req, req.params.id as string);
 
-  const installments = await Installment.find({ studentId: req.params.id })
+  const installments = await Installment.find({ studentId: req.params.id, tenantId: req.tenantId })
     .sort({ installmentNumber: 1 });
 
   sendResponse(res, { message: 'Installments fetched', data: installments });
@@ -344,10 +349,10 @@ export const generateInstallmentPlan = asyncHandler(async (req: Request, res: Re
     throw new BadRequestError('numberOfInstallments must be at least 1');
   }
 
-  const student = await Student.findById(req.params.id).populate('courseId', 'title');
+  const student = await Student.findOne({ _id: req.params.id, tenantId: req.tenantId }).populate('courseId', 'title');
   if (!student) throw new NotFoundError('Student not found');
 
-  const existing = await Installment.countDocuments({ studentId: student._id });
+  const existing = await Installment.countDocuments({ studentId: student._id, tenantId: req.tenantId });
   if (existing > 0) {
     throw new BadRequestError('An installment plan already exists for this student');
   }
@@ -442,7 +447,9 @@ export const generateInstallmentPlan = asyncHandler(async (req: Request, res: Re
     }));
   }
 
-  const installments = await Installment.insertMany(installmentsToInsert);
+  const installments = await Installment.insertMany(
+    installmentsToInsert.map((inst) => ({ ...inst, tenantId: student.tenantId }))
+  );
 
   sendResponse(res, { statusCode: 201, message: 'Installment plan generated', data: installments });
 });
@@ -451,14 +458,14 @@ export const markInstallmentPaid = asyncHandler(async (req: Request, res: Respon
   const { paymentMethod, transactionId } = req.body;
   if (!paymentMethod) throw new BadRequestError('Payment method is required');
 
-  const installment = await Installment.findById(req.params.id);
+  const installment = await Installment.findOne({ _id: req.params.id, tenantId: req.tenantId });
   if (!installment) throw new NotFoundError('Installment not found');
 
   if (installment.status === 'paid') {
     throw new BadRequestError('Installment is already paid');
   }
 
-  const student = await Student.findById(installment.studentId).populate('courseId', 'title');
+  const student = await Student.findOne({ _id: installment.studentId, tenantId: req.tenantId }).populate('courseId', 'title');
   if (!student) throw new NotFoundError('Student not found');
 
   // An out-of-band payment (e.g. a lump sum recorded directly) can already

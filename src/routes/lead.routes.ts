@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { protect, authorize } from '../middleware/auth.middleware';
+import { resolveTenant } from '../middleware/tenant.middleware';
 import { inquiryLimiter } from '../middleware/rateLimiter';
 import {
   submitInquiry,
@@ -14,7 +15,7 @@ import {
 const router = Router();
 
 // Public
-router.post('/', inquiryLimiter, submitInquiry);
+router.post('/', inquiryLimiter, resolveTenant, submitInquiry);
 
 // Admin
 router.get('/', protect, authorize('admin'), getAllLeads);

@@ -22,6 +22,7 @@
 import mongoose from 'mongoose';
 import env from '../config/env';
 import Testimonial from '../models/Testimonial';
+import Tenant from '../models/Tenant';
 
 interface SeedTestimonial {
   studentName: string;
@@ -227,11 +228,21 @@ async function seed() {
   await mongoose.connect(env.MONGODB_URI);
   console.log('Connected to MongoDB. Seeding testimonials...');
 
+  // Always seeds into the default tenant — this is the original,
+  // single-tenant WebiGeeks review set.
+  const tenant = await Tenant.findOne({ slug: env.DEFAULT_TENANT_SLUG });
+  if (!tenant) {
+    throw new Error(
+      `No tenant found for slug "${env.DEFAULT_TENANT_SLUG}" — run migrateDefaultTenant first.`
+    );
+  }
+
   for (const [index, t] of testimonials.entries()) {
     await Testimonial.findOneAndUpdate(
-      { studentName: t.studentName, testimonialText: t.testimonialText },
+      { studentName: t.studentName, testimonialText: t.testimonialText, tenantId: tenant._id },
       {
         $set: {
+          tenantId: tenant._id,
           studentName: t.studentName,
           courseName: t.courseName,
           testimonialText: t.testimonialText,

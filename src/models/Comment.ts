@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IComment extends Document {
+  tenantId: mongoose.Types.ObjectId;
   blog: mongoose.Types.ObjectId;
   author: string; // name/email
   email: string;
@@ -12,6 +13,12 @@ export interface IComment extends Document {
 
 const commentSchema = new Schema<IComment>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     blog: {
       type: Schema.Types.ObjectId,
       ref: 'Blog',

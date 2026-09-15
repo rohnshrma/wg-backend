@@ -21,6 +21,7 @@ export const submitInquiry = asyncHandler(
     }
 
     const lead = await Lead.create({
+      tenantId: req.tenantId,
       name,
       phone,
       email,
@@ -32,7 +33,7 @@ export const submitInquiry = asyncHandler(
     NotificationService.newLead(name, phone, email, courseInterested, lead.source).catch((error) => {
       console.error('Failed to send new-lead notification:', error);
     });
-    notifyAdmins('New Inquiry 🔔', `${name} enquired about ${courseInterested}.`, '/admin/leads').catch((error) => {
+    notifyAdmins(req.tenantId as string, 'New Inquiry 🔔', `${name} enquired about ${courseInterested}.`, '/admin/leads').catch((error) => {
       console.error('Failed to create admin notification for new lead:', error);
     });
 
@@ -56,7 +57,7 @@ export const getAllLeads = asyncHandler(
     const source = req.query.source as string;
     const search = req.query.search as string;
 
-    const query: Record<string, any> = {};
+    const query: Record<string, any> = { tenantId: req.tenantId };
     if (status) query.status = status;
     if (source) query.source = source;
     if (search) {
@@ -88,7 +89,7 @@ export const getAllLeads = asyncHandler(
  */
 export const getLeadById = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const lead = await Lead.findById(req.params.id)
+    const lead = await Lead.findOne({ _id: req.params.id, tenantId: req.tenantId })
       .populate('assignedTo', 'email')
       .populate('notes.addedBy', 'email');
 
@@ -105,8 +106,8 @@ export const getLeadById = asyncHandler(
  */
 export const updateLead = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const lead = await Lead.findByIdAndUpdate(
-      req.params.id,
+    const lead = await Lead.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.tenantId },
       { $set: req.body },
       { new: true, runValidators: true }
     );
@@ -127,8 +128,8 @@ export const addNote = asyncHandler(
     const { text } = req.body;
     if (!text) throw new BadRequestError('Note text is required');
 
-    const lead = await Lead.findByIdAndUpdate(
-      req.params.id,
+    const lead = await Lead.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.tenantId },
       {
         $push: {
           notes: { text, addedBy: req.user!._id, addedAt: new Date() },
@@ -150,7 +151,7 @@ export const addNote = asyncHandler(
  */
 export const deleteLead = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const lead = await Lead.findByIdAndDelete(req.params.id);
+    const lead = await Lead.findOneAndDelete({ _id: req.params.id, tenantId: req.tenantId });
 
     if (!lead) throw new NotFoundError('Lead not found');
 
@@ -165,7 +166,7 @@ export const deleteLead = asyncHandler(
  */
 export const convertLead = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const lead = await Lead.findById(req.params.id);
+    const lead = await Lead.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!lead) throw new NotFoundError('Lead not found');
 
     if (lead.status === 'converted') {

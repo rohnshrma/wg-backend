@@ -31,6 +31,7 @@ export interface IStageHistoryEntry {
 }
 
 export interface IEnquiry extends Document {
+  tenantId: mongoose.Types.ObjectId;
   name: string;
   course: string;
   education?: string;
@@ -50,6 +51,12 @@ export interface IEnquiry extends Document {
 
 const enquirySchema = new Schema<IEnquiry>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     name: {
       type: String,
       required: [true, 'Name is required'],

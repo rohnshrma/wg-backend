@@ -12,7 +12,7 @@ const router = Router();
 router.get('/', protect, asyncHandler(async (req: Request, res: Response) => {
   const { page, limit, skip } = getPagination(req.query.page, req.query.limit, 20);
 
-  const query = { recipientId: req.user!._id };
+  const query = { tenantId: req.tenantId, recipientId: req.user!._id };
   const total = await Notification.countDocuments(query);
   const notifications = await Notification.find(query)
     .sort({ createdAt: -1 })
@@ -34,7 +34,7 @@ router.get('/', protect, asyncHandler(async (req: Request, res: Response) => {
 // Mark as read (only the recipient may mark their own notification)
 router.patch('/:id/read', protect, asyncHandler(async (req: Request, res: Response) => {
   const notification = await Notification.findOneAndUpdate(
-    { _id: req.params.id, recipientId: req.user!._id },
+    { _id: req.params.id, tenantId: req.tenantId, recipientId: req.user!._id },
     { isRead: true },
     { new: true }
   );
@@ -45,7 +45,7 @@ router.patch('/:id/read', protect, asyncHandler(async (req: Request, res: Respon
 // Mark all as read
 router.patch('/read-all', protect, asyncHandler(async (req: Request, res: Response) => {
   await Notification.updateMany(
-    { recipientId: req.user!._id, isRead: false },
+    { tenantId: req.tenantId, recipientId: req.user!._id, isRead: false },
     { isRead: true }
   );
   sendResponse(res, { message: 'All notifications marked as read' });
@@ -55,6 +55,7 @@ router.patch('/read-all', protect, asyncHandler(async (req: Request, res: Respon
 router.post('/', protect, authorize('admin'), asyncHandler(async (req: Request, res: Response) => {
   const { recipientId, title, message, type, link } = req.body;
   const notification = await Notification.create({
+    tenantId: req.tenantId,
     recipientId,
     title,
     message,
@@ -68,9 +69,10 @@ router.post('/', protect, authorize('admin'), asyncHandler(async (req: Request, 
 router.post('/broadcast', protect, authorize('admin'), asyncHandler(async (req: Request, res: Response) => {
   const { title, message, type } = req.body;
   const User = (await import('../models/User')).default;
-  const students = await User.find({ role: 'student', isActive: true }).select('_id');
-  
+  const students = await User.find({ tenantId: req.tenantId, role: 'student', isActive: true }).select('_id');
+
   const notifications = students.map(s => ({
+    tenantId: req.tenantId,
     recipientId: s._id,
     title,
     message,

@@ -148,7 +148,10 @@ export const deleteStaffUser = asyncHandler(
 
     // Enquiries outlive the counsellor who owned them — reassign rather than
     // orphan them (owner is a required field, so they'd fail validation later).
-    await Enquiry.updateMany({ owner: user._id }, { $set: { owner: req.user!._id } });
+    await Enquiry.updateMany(
+      { owner: user._id, tenantId: req.tenantId },
+      { $set: { owner: req.user!._id } }
+    );
 
     await user.deleteOne();
 

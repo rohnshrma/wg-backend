@@ -29,7 +29,7 @@ export const getAllStudents = asyncHandler(
     const search = req.query.search as string;
     const courseId = req.query.courseId as string;
 
-    const query: Record<string, any> = {};
+    const query: Record<string, any> = { tenantId: req.tenantId };
 
     if (status) query.status = status;
     if (courseId) query.courseId = courseId;
@@ -68,7 +68,7 @@ export const getAllStudents = asyncHandler(
  */
 export const getStudentById = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const student = await Student.findById(req.params.id)
+    const student = await Student.findOne({ _id: req.params.id, tenantId: req.tenantId })
       .populate('courseId')
       .populate('approvedBy', 'email');
 
@@ -98,8 +98,10 @@ export const getStudentById = asyncHandler(
  */
 export const updateMyProfile = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    let student = await Student.findOne({ userId: req.user!._id });
-    const course = req.body.courseId ? await Course.findById(req.body.courseId) : null;
+    let student = await Student.findOne({ userId: req.user!._id, tenantId: req.tenantId });
+    const course = req.body.courseId
+      ? await Course.findOne({ _id: req.body.courseId, tenantId: req.tenantId })
+      : null;
     const fullName =
       req.body.fullName ||
       [req.body.firstName, req.body.lastName].filter(Boolean).join(' ').trim() ||
@@ -136,10 +138,12 @@ export const updateMyProfile = asyncHandler(
 
     if (!student) {
       student = await Student.create({
+        tenantId: req.tenantId,
         userId: req.user!._id,
         ...profilePayload,
       });
       notifyAdmins(
+        req.tenantId as string,
         'New Registration 🎓',
         `${student.fullName} submitted a registration awaiting approval.`,
         '/admin/students'
@@ -153,8 +157,8 @@ export const updateMyProfile = asyncHandler(
         );
       }
 
-      student = await Student.findByIdAndUpdate(
-        student._id,
+      student = await Student.findOneAndUpdate(
+        { _id: student._id, tenantId: req.tenantId },
         { $set: profilePayload },
         { new: true, runValidators: true }
       );
@@ -213,7 +217,7 @@ function pickSelfEditableFields(body: Record<string, any>): Record<string, any> 
  */
 export const updateStudent = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findOne({ _id: req.params.id, tenantId: req.tenantId });
 
     if (!student) {
       throw new NotFoundError('Student not found');
@@ -242,7 +246,7 @@ export const updateStudent = asyncHandler(
     // When a student switches course, re-derive the fee from the course record
     // rather than trusting any client-supplied amount.
     if (!isAdminUpdate && updatePayload.courseId) {
-      const course = await Course.findById(updatePayload.courseId);
+      const course = await Course.findOne({ _id: updatePayload.courseId, tenantId: req.tenantId });
       if (!course) throw new BadRequestError('Selected course not found');
       updatePayload.courseFees = course.fees;
     }
@@ -261,8 +265,8 @@ export const updateStudent = asyncHandler(
     }
 
     // Update fields
-    const updatedStudent = await Student.findByIdAndUpdate(
-      req.params.id,
+    const updatedStudent = await Student.findOneAndUpdate(
+      { _id: req.params.id, tenantId: req.tenantId },
       { $set: updatePayload },
       { new: true, runValidators: true }
     );
@@ -326,7 +330,7 @@ export const updateStudent = asyncHandler(
  */
 export const approveStudent = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const student = await Student.findById(req.params.id).populate('courseId', 'title');
+    const student = await Student.findOne({ _id: req.params.id, tenantId: req.tenantId }).populate('courseId', 'title');
 
     if (!student) {
       throw new NotFoundError('Student not found');
@@ -349,6 +353,7 @@ export const approveStudent = asyncHandler(
 
     // Create notification
     await Notification.create({
+      tenantId: req.tenantId,
       recipientId: student.userId,
       title: 'Registration Approved! 🎉',
       message: `Congratulations! Your registration has been approved. Your Admission ID is ${admissionId}.`,
@@ -390,7 +395,7 @@ export const rejectStudent = asyncHandler(
       throw new BadRequestError('Rejection reason is required');
     }
 
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findOne({ _id: req.params.id, tenantId: req.tenantId });
 
     if (!student) {
       throw new NotFoundError('Student not found');
@@ -402,6 +407,7 @@ export const rejectStudent = asyncHandler(
 
     // Create notification
     await Notification.create({
+      tenantId: req.tenantId,
       recipientId: student.userId,
       title: 'Registration Update',
       message: `Your registration was not approved. Reason: ${reason}. Please contact support for assistance.`,
@@ -433,16 +439,16 @@ export const rejectStudent = asyncHandler(
  */
 export const deleteStudent = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findOne({ _id: req.params.id, tenantId: req.tenantId });
     if (!student) {
       throw new NotFoundError('Student not found');
     }
 
     await Promise.all([
-      Payment.deleteMany({ studentId: student._id }),
-      Installment.deleteMany({ studentId: student._id }),
-      Notification.deleteMany({ recipientId: student.userId }),
-      User.deleteOne({ _id: student.userId }),
+      Payment.deleteMany({ studentId: student._id, tenantId: req.tenantId }),
+      Installment.deleteMany({ studentId: student._id, tenantId: req.tenantId }),
+      Notification.deleteMany({ recipientId: student.userId, tenantId: req.tenantId }),
+      User.deleteOne({ _id: student.userId, tenantId: req.tenantId }),
     ]);
 
     await student.deleteOne();
@@ -458,7 +464,7 @@ export const deleteStudent = asyncHandler(
  */
 export const getMyDashboard = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const student = await Student.findOne({ userId: req.user!._id })
+    const student = await Student.findOne({ userId: req.user!._id, tenantId: req.tenantId })
       .populate('courseId');
 
     if (!student) {
@@ -474,6 +480,7 @@ export const getMyDashboard = asyncHandler(
 
     // Get unread notifications count
     const unreadNotifications = await Notification.countDocuments({
+      tenantId: req.tenantId,
       recipientId: req.user!._id,
       isRead: false,
     });

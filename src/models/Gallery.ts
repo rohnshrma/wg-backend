@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IGallery extends Document {
+  tenantId: mongoose.Types.ObjectId;
   imageUrl: string;
   thumbnailUrl: string;
   caption?: string;
@@ -14,6 +15,12 @@ export interface IGallery extends Document {
 
 const gallerySchema = new Schema<IGallery>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     imageUrl: {
       type: String,
       required: [true, 'Image URL is required'],

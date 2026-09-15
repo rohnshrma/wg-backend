@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ITestimonial extends Document {
+  tenantId: mongoose.Types.ObjectId;
   studentName: string;
   courseName: string;
   companyPlaced?: string;
@@ -19,6 +20,12 @@ export interface ITestimonial extends Document {
 
 const testimonialSchema = new Schema<ITestimonial>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     studentName: {
       type: String,
       required: [true, 'Student name is required'],

@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IPayment extends Document {
+  tenantId: mongoose.Types.ObjectId;
   studentId: mongoose.Types.ObjectId;
   courseId: mongoose.Types.ObjectId;
   amount: number;
@@ -18,6 +19,12 @@ export interface IPayment extends Document {
 
 const paymentSchema = new Schema<IPayment>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     studentId: {
       type: Schema.Types.ObjectId,
       ref: 'Student',
@@ -47,7 +54,6 @@ const paymentSchema = new Schema<IPayment>(
     receiptNumber: {
       type: String,
       required: true,
-      unique: true,
     },
     receiptUrl: String,
     notes: String,
@@ -69,6 +75,9 @@ const paymentSchema = new Schema<IPayment>(
 
 paymentSchema.index({ studentId: 1 });
 paymentSchema.index({ paymentDate: -1 });
+// Receipt numbers are generated per tenant, not globally — scope uniqueness
+// accordingly.
+paymentSchema.index({ tenantId: 1, receiptNumber: 1 }, { unique: true });
 
 const Payment = mongoose.model<IPayment>('Payment', paymentSchema);
 export default Payment;

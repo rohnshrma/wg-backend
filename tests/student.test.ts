@@ -2,10 +2,18 @@ import request from 'supertest';
 import app from '../src/app';
 import User from '../src/models/User';
 import Student from '../src/models/Student';
+import { ITenant } from '../src/models/Tenant';
 import { connectTestDB, clearTestDB, disconnectTestDB } from './setup/db';
+import { seedTestTenant } from './setup/tenant';
+
+let tenant: ITenant;
 
 beforeAll(async () => {
   await connectTestDB();
+});
+
+beforeEach(async () => {
+  tenant = await seedTestTenant();
 });
 
 afterEach(async () => {
@@ -95,9 +103,10 @@ describe('Student profile — mass-assignment protection', () => {
   });
 
   it('lets an admin update any field on a student record', async () => {
-    await User.create({ email: 'admin@example.com', password: 'Password123', role: 'admin' });
+    await User.create({ tenantId: tenant._id, email: 'admin@example.com', password: 'Password123', role: 'admin' });
     const student = await Student.create({
-      userId: (await User.create({ email: 'managed-student@example.com', password: 'Password123', role: 'student' }))._id,
+      tenantId: tenant._id,
+      userId: (await User.create({ tenantId: tenant._id, email: 'managed-student@example.com', password: 'Password123', role: 'student' }))._id,
       ...validProfilePayload,
       dateOfBirth: new Date(validProfilePayload.dateOfBirth),
       joiningDate: new Date(validProfilePayload.joiningDate),

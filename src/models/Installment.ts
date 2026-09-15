@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IInstallment extends Document {
+  tenantId: mongoose.Types.ObjectId;
   studentId: mongoose.Types.ObjectId;
   paymentId?: mongoose.Types.ObjectId;
   installmentNumber: number;
@@ -28,6 +29,12 @@ export interface IInstallment extends Document {
 
 const installmentSchema = new Schema<IInstallment>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     studentId: {
       type: Schema.Types.ObjectId,
       ref: 'Student',

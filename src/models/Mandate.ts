@@ -9,6 +9,7 @@ export type MandateStatus =
   | 'failed';
 
 export interface IMandate extends Document {
+  tenantId: mongoose.Types.ObjectId;
   studentId: mongoose.Types.ObjectId;
   courseId?: mongoose.Types.ObjectId;
   razorpayPlanId: string;
@@ -30,6 +31,12 @@ export interface IMandate extends Document {
 
 const mandateSchema = new Schema<IMandate>(
   {
+    tenantId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Tenant',
+      required: true,
+      index: true,
+    },
     studentId: {
       type: Schema.Types.ObjectId,
       ref: 'Student',

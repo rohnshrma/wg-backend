@@ -3,6 +3,7 @@ import Lead from '../models/Lead';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
+import { createEnquiryFromLead } from '../services/enquirySync';
 import { notifyAdmins } from '../utils/notifyAdmins';
 import { BadRequestError, NotFoundError } from '../utils/apiError';
 import { getPagination } from '../utils/helpers';
@@ -34,6 +35,9 @@ export const submitInquiry = asyncHandler(
     });
     notifyAdmins('New Inquiry 🔔', `${name} enquired about ${courseInterested}.`, '/admin/leads').catch((error) => {
       console.error('Failed to create admin notification for new lead:', error);
+    });
+    createEnquiryFromLead(lead).catch((error) => {
+      console.error('Failed to sync lead into enquiry pipeline:', error);
     });
 
     sendResponse(res, {

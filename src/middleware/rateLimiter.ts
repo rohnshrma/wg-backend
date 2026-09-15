@@ -33,11 +33,15 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Inquiry rate limiter
+// Inquiry rate limiter. A single visitor can legitimately trip the popup,
+// the sticky call-back CTA, and a course page's own form in one browsing
+// session, and this endpoint is also shared by every campus/office/school
+// behind one NAT'd IP — 5/hour was tight enough to silently swallow real
+// enquiries, so this stays well above normal traffic while still blocking bots.
 export const inquiryLimiter = rateLimit({
   skip: skipInTests,
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // limit each IP to 5 inquiries per hour
+  max: 30, // limit each IP to 30 inquiries per hour
   message: {
     success: false,
     message: 'Too many inquiries submitted, please try again later',

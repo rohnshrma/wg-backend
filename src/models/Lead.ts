@@ -13,7 +13,7 @@ export interface ILead extends Document {
   courseInterested: string;
   message?: string;
 
-  source: 'hero_form' | 'popup' | 'exit_intent' | 'contact_page' | 'course_page' | 'book_demo';
+  source: 'hero_form' | 'popup' | 'exit_intent' | 'contact_page' | 'course_page' | 'book_demo' | 'sticky_cta';
   status: 'new' | 'contacted' | 'interested' | 'converted' | 'cold' | 'lost';
 
   notes: ILeadNote[];

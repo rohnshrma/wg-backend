@@ -15,6 +15,8 @@ import settingsRoutes from './settings.routes';
 import enquiryRoutes from './enquiry.routes';
 import userRoutes from './user.routes';
 import webhookRoutes from './webhook.routes';
+import projectRoutes from './project.routes';
+import proposalRoutes from './proposal.routes';
 
 const router = Router();
 
@@ -34,5 +36,7 @@ router.use('/settings', settingsRoutes);
 router.use('/enquiries', enquiryRoutes);
 router.use('/users', userRoutes);
 router.use('/webhooks', webhookRoutes);
+router.use('/projects', projectRoutes);
+router.use('/proposals', proposalRoutes);
 
 export default router;

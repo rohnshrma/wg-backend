@@ -33,11 +33,15 @@ const allowedOrigins = [
 // browser's original Origin header straight through when it forwards a
 // request here, so testing from a phone on the same LAN (http://192.168.x.x:3000,
 // etc. — whatever address DHCP happens to hand out) hits this check too, not
-// just direct browser calls. Gated to development so it can never widen what
-// production accepts.
+// just direct browser calls. The port is also unpredictable locally since
+// Next.js auto-increments past whatever's already bound (3000, 3001, 5173, ...),
+// so the port is left open rather than pinned to :3000. Gated to development
+// so it can never widen what production accepts.
 const isDevLanOrigin = (origin: string): boolean =>
   env.NODE_ENV === 'development' &&
-  /^http:\/\/(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))\.[\d.]+:3000$/.test(origin);
+  /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.[\d.]+|10\.[\d.]+|172\.(1[6-9]|2\d|3[01])\.[\d.]+):\d+$/.test(
+    origin
+  );
 
 app.use(
   cors({

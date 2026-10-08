@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import User, { IUser } from '../models/User';
+import Student from '../models/Student';
 import env from '../config/env';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
@@ -29,6 +30,21 @@ const authCookieOptions = () => ({
 
 const setAuthCookie = (res: Response, token: string): void => {
   res.cookie(AUTH_COOKIE_NAME, token, authCookieOptions());
+};
+
+// A paused student can still log in — the frontend shows a blocking popup
+// with the reason instead. Fetched on login and on /auth/me so the popup
+// reappears on any later page load/refresh, not just right after login.
+const getPauseStatus = async (
+  user: Pick<IUser, '_id' | 'role'>
+): Promise<{ isPaused: boolean; pauseReason?: string; pauseCategory?: string }> => {
+  if (user.role !== 'student') return { isPaused: false };
+  const student = await Student.findOne({ userId: user._id }).select(
+    'isPaused pauseReason pauseCategory'
+  );
+  return student?.isPaused
+    ? { isPaused: true, pauseReason: student.pauseReason, pauseCategory: student.pauseCategory }
+    : { isPaused: false };
 };
 
 /**
@@ -118,6 +134,8 @@ export const login = asyncHandler(
     user.lastLogin = new Date();
     await user.save({ validateBeforeSave: false });
 
+    const pauseStatus = await getPauseStatus(user);
+
     sendResponse(res, {
       message: 'Login successful',
       data: {
@@ -125,6 +143,7 @@ export const login = asyncHandler(
           id: user._id,
           email: user.email,
           role: user.role,
+          ...pauseStatus,
         },
       },
     });
@@ -150,9 +169,11 @@ export const logout = asyncHandler(
  */
 export const getMe = asyncHandler(
   async (req: Request, res: Response, _next: NextFunction): Promise<void> => {
+    const pauseStatus = await getPauseStatus(req.user!);
+
     sendResponse(res, {
       message: 'User profile fetched',
-      data: { user: req.user },
+      data: { user: { ...req.user!.toObject(), ...pauseStatus } },
     });
   }
 );

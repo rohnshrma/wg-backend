@@ -426,6 +426,120 @@ export const rejectStudent = asyncHandler(
 );
 
 /**
+ * @desc    Pause a student's account — flags it as paused, records the
+ *          reason, and sends the (admin-reviewed/edited) notice email.
+ *          The student can still log in; the frontend shows a blocking
+ *          popup with the reason and support contact details as soon as
+ *          they do (see Student.isPaused / pauseReason).
+ * @route   PATCH /api/students/:id/pause
+ * @access  Admin
+ */
+export const pauseStudent = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { category, reason, emailSubject, emailMessage } = req.body;
+
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      throw new NotFoundError('Student not found');
+    }
+
+    if (student.isPaused) {
+      throw new BadRequestError('This student account is already paused');
+    }
+
+    student.isPaused = true;
+    student.pauseCategory = category;
+    student.pauseReason = reason;
+    student.pausedAt = new Date();
+    student.pausedBy = req.user!._id;
+    student.resumedAt = undefined;
+    // Resume proof from any previous pause cycle shouldn't carry over and
+    // look like it applies to this one.
+    student.resumePaymentMethod = undefined;
+    student.resumeTransactionId = undefined;
+    await student.save();
+
+    await Notification.create({
+      recipientId: student.userId,
+      title: 'Account Paused',
+      message: reason,
+      type: 'account_paused',
+      link: '/dashboard',
+    });
+
+    const emailSent = await NotificationService.accountPaused(
+      student.email,
+      emailSubject,
+      emailMessage
+    ).catch((error) => {
+      console.error('Failed to send account-paused email:', error);
+      return false;
+    });
+
+    sendResponse(res, {
+      message: 'Student account paused successfully',
+      data: { student, emailSent },
+    });
+  }
+);
+
+/**
+ * @desc    Resume a paused student's account — clears the paused flag so
+ *          the warning popup stops showing. A fee_payment pause requires
+ *          the admin to record how/where the payment was received before
+ *          it can be lifted, so there's always an audit trail of why the
+ *          account came back online.
+ * @route   PATCH /api/students/:id/resume
+ * @access  Admin
+ */
+export const resumeStudent = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { paymentMethod, transactionId } = req.body;
+
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      throw new NotFoundError('Student not found');
+    }
+
+    if (!student.isPaused) {
+      throw new BadRequestError('This student account is not paused');
+    }
+
+    if (student.pauseCategory === 'fee_payment' && (!paymentMethod || !transactionId)) {
+      throw new BadRequestError(
+        'This account was paused for a pending fee payment — record the payment method and transaction/reference ID to resume it'
+      );
+    }
+
+    student.isPaused = false;
+    student.resumedAt = new Date();
+    if (student.pauseCategory === 'fee_payment') {
+      student.resumePaymentMethod = paymentMethod;
+      student.resumeTransactionId = transactionId;
+    }
+    await student.save();
+
+    const resumeMessage =
+      student.pauseCategory === 'fee_payment'
+        ? `We've received your payment (Ref: ${transactionId}) and your account access has been restored.`
+        : 'Your account is back in good standing.';
+
+    await Notification.create({
+      recipientId: student.userId,
+      title: 'Account Reactivated',
+      message: resumeMessage,
+      type: 'account_resumed',
+      link: '/dashboard',
+    });
+
+    sendResponse(res, {
+      message: 'Student account reactivated successfully',
+      data: student,
+    });
+  }
+);
+
+/**
  * @desc    Permanently delete a student's admission record, along with
  *          their payments, installments, notifications, and login account.
  * @route   DELETE /api/students/:id

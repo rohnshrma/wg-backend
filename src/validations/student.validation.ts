@@ -41,3 +41,17 @@ export const studentProfileSchema = z.object({
   joiningDate: z.union([z.string(), z.date()]).optional(),
   paymentMode: z.enum(['full', 'emi']).optional(),
 });
+
+export const pauseStudentSchema = z.object({
+  category: z.enum(['fee_payment', 'policy_violation', 'other'], {
+    errorMap: () => ({ message: 'A pause category is required' }),
+  }),
+  reason: z.string().trim().min(1, 'A reason for pausing this account is required'),
+  emailSubject: z.string().trim().min(1, 'Email subject is required'),
+  emailMessage: z.string().trim().min(1, 'Email message is required'),
+});
+
+export const resumeStudentSchema = z.object({
+  paymentMethod: z.enum(['upi', 'cash', 'bank_transfer', 'other']).optional(),
+  transactionId: z.string().trim().optional(),
+});

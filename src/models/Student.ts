@@ -50,6 +50,18 @@ export interface IStudent extends Document {
   // Profile Lock
   isProfileLocked: boolean;
 
+  // Account Pause (admin-initiated suspension of login access)
+  isPaused: boolean;
+  pauseCategory?: 'fee_payment' | 'policy_violation' | 'other';
+  pauseReason?: string;
+  pausedAt?: Date;
+  pausedBy?: mongoose.Types.ObjectId;
+  resumedAt?: Date;
+  // Recorded when a fee_payment pause is resumed — the admin's record of
+  // the payment that resolved it.
+  resumePaymentMethod?: 'upi' | 'cash' | 'bank_transfer' | 'other';
+  resumeTransactionId?: string;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -182,6 +194,28 @@ const studentSchema = new Schema<IStudent>(
       type: Boolean,
       default: false,
     },
+
+    // Account Pause (admin-initiated suspension of login access)
+    isPaused: {
+      type: Boolean,
+      default: false,
+    },
+    pauseCategory: {
+      type: String,
+      enum: ['fee_payment', 'policy_violation', 'other'],
+    },
+    pauseReason: String,
+    pausedAt: Date,
+    pausedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    resumedAt: Date,
+    resumePaymentMethod: {
+      type: String,
+      enum: ['upi', 'cash', 'bank_transfer', 'other'],
+    },
+    resumeTransactionId: String,
   },
   {
     timestamps: true,

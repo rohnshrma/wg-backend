@@ -112,3 +112,144 @@ describe('Student profile — mass-assignment protection', () => {
     expect(res.body.data.totalPaid).toBe(25000);
   });
 });
+
+describe('Pause / resume student account', () => {
+  const setupAdminAndStudent = async () => {
+    await User.create({ email: 'admin2@example.com', password: 'Password123', role: 'admin' });
+    const studentUser = await User.create({
+      email: 'paused-student@example.com',
+      password: 'Password123',
+      role: 'student',
+    });
+    const student = await Student.create({
+      userId: studentUser._id,
+      ...validProfilePayload,
+      email: 'paused-student@example.com',
+      dateOfBirth: new Date(validProfilePayload.dateOfBirth),
+      joiningDate: new Date(validProfilePayload.joiningDate),
+    });
+
+    const admin = request.agent(app);
+    await admin.post('/api/auth/login').send({ email: 'admin2@example.com', password: 'Password123' });
+
+    return { admin, student, studentUser };
+  };
+
+  it('lets a paused student log in, and surfaces the pause reason in the response', async () => {
+    const { admin, student } = await setupAdminAndStudent();
+
+    const pauseRes = await admin.patch(`/api/students/${student._id}/pause`).send({
+      category: 'fee_payment',
+      reason: 'Fee payment overdue by 45 days',
+      emailSubject: 'Important: Your account access has been paused',
+      emailMessage: 'Your account has been paused due to overdue fees. Please contact support.',
+    });
+    expect(pauseRes.status).toBe(200);
+    expect(pauseRes.body.data.student.isPaused).toBe(true);
+    expect(pauseRes.body.data.student.pauseCategory).toBe('fee_payment');
+    expect(pauseRes.body.data.student.pauseReason).toBe('Fee payment overdue by 45 days');
+
+    const persistedStudent = await Student.findById(student._id);
+    expect(persistedStudent?.isPaused).toBe(true);
+    const persistedUser = await User.findOne({ email: 'paused-student@example.com' });
+    expect(persistedUser?.isActive).toBe(true);
+
+    const loginAttempt = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'paused-student@example.com', password: 'Password123' });
+    expect(loginAttempt.status).toBe(200);
+    expect(loginAttempt.body.data.user.isPaused).toBe(true);
+    expect(loginAttempt.body.data.user.pauseCategory).toBe('fee_payment');
+    expect(loginAttempt.body.data.user.pauseReason).toBe('Fee payment overdue by 45 days');
+    expect(loginAttempt.body.data.user.pauseReason.toLowerCase()).not.toContain('admin');
+
+    // /auth/me also carries the pause status, so the popup still shows on a
+    // page refresh (not just the moment right after login).
+    const meRes = await request(app)
+      .get('/api/auth/me')
+      .set('Cookie', loginAttempt.headers['set-cookie']);
+    expect(meRes.body.data.user.isPaused).toBe(true);
+    expect(meRes.body.data.user.pauseReason).toBe('Fee payment overdue by 45 days');
+
+    const secondPause = await admin.patch(`/api/students/${student._id}/pause`).send({
+      category: 'fee_payment',
+      reason: 'Already paused attempt',
+      emailSubject: 'x',
+      emailMessage: 'x',
+    });
+    expect(secondPause.status).toBe(400);
+  }, 20000);
+
+  it('clears the pause popup on resume (non fee-payment category needs no payment proof)', async () => {
+    const { admin, student } = await setupAdminAndStudent();
+
+    await admin.patch(`/api/students/${student._id}/pause`).send({
+      category: 'policy_violation',
+      reason: 'Policy violation',
+      emailSubject: 'Paused',
+      emailMessage: 'Your account has been paused.',
+    });
+
+    const resumeRes = await admin.patch(`/api/students/${student._id}/resume`);
+    expect(resumeRes.status).toBe(200);
+    expect(resumeRes.body.data.isPaused).toBe(false);
+
+    const loginAttempt = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'paused-student@example.com', password: 'Password123' });
+    expect(loginAttempt.status).toBe(200);
+    expect(loginAttempt.body.data.user.isPaused).toBe(false);
+
+    const resumeAgain = await admin.patch(`/api/students/${student._id}/resume`);
+    expect(resumeAgain.status).toBe(400);
+  }, 20000);
+
+  it('requires payment method + transaction id to resume a fee_payment pause', async () => {
+    const { admin, student } = await setupAdminAndStudent();
+
+    await admin.patch(`/api/students/${student._id}/pause`).send({
+      category: 'fee_payment',
+      reason: 'Pending installment #2',
+      emailSubject: 'Paused',
+      emailMessage: 'Please pay to resume.',
+    });
+
+    const bareResume = await admin.patch(`/api/students/${student._id}/resume`);
+    expect(bareResume.status).toBe(400);
+
+    const resumeWithProof = await admin.patch(`/api/students/${student._id}/resume`).send({
+      paymentMethod: 'upi',
+      transactionId: 'UPI-TXN-12345',
+    });
+    expect(resumeWithProof.status).toBe(200);
+    expect(resumeWithProof.body.data.isPaused).toBe(false);
+
+    const persisted = await Student.findById(student._id);
+    expect(persisted?.resumePaymentMethod).toBe('upi');
+    expect(persisted?.resumeTransactionId).toBe('UPI-TXN-12345');
+  }, 20000);
+
+  it('rejects a pause request missing a reason or category', async () => {
+    const { admin, student } = await setupAdminAndStudent();
+
+    const res = await admin.patch(`/api/students/${student._id}/pause`).send({
+      emailSubject: 'x',
+      emailMessage: 'x',
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('blocks a non-admin from pausing a student account', async () => {
+    const { student } = await setupAdminAndStudent();
+
+    const agent = request.agent(app);
+    await agent.post('/api/auth/register').send({ email: 'rando@example.com', password: 'Password123' });
+
+    const res = await agent.patch(`/api/students/${student._id}/pause`).send({
+      reason: 'test',
+      emailSubject: 'x',
+      emailMessage: 'x',
+    });
+    expect(res.status).toBe(403);
+  });
+});

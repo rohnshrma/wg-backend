@@ -24,6 +24,7 @@ import {
   sendAutoDebitSuccessEmail,
   sendAutoDebitFailedEmail,
   sendMandateAlertEmail,
+  sendAccountPausedEmail,
 } from "./emailService";
 
 /**
@@ -210,5 +211,12 @@ export const NotificationService = {
   // AutoPay — mandate needs manual follow-up (halted/cancelled)
   async mandateNeedsAttention(studentName: string, admissionId: string | undefined, reason: string) {
     await sendMandateAlertEmail(studentName, admissionId, reason);
+  },
+
+  // Account paused (admin-triggered, on demand) — admin has already reviewed
+  // and edited the subject/message in the pause modal, so this isn't
+  // fire-and-forget: the UI needs to know whether the send actually succeeded.
+  async accountPaused(email: string, subject: string, message: string): Promise<boolean> {
+    return sendAccountPausedEmail(email, subject, message);
   },
 };

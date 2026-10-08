@@ -27,7 +27,22 @@ export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
 
 // ─── Email Templates ────────────────────────────────────────
 
-const baseTemplate = (content: string, title: string) => `
+// theme 'danger' swaps the header/button/info-box accent to red for
+// sensitive notices (e.g. account paused) without duplicating the whole
+// template shell for every color variant.
+const baseTemplate = (content: string, title: string, theme: "brand" | "danger" = "brand") => {
+  const headerGradient =
+    theme === "danger"
+      ? "linear-gradient(135deg, #DC2626 0%, #7C2D12 100%)"
+      : "linear-gradient(135deg, #1672B8 0%, #606062 100%)";
+  const btnGradient =
+    theme === "danger"
+      ? "linear-gradient(135deg, #DC2626 0%, #991B1B 100%)"
+      : "linear-gradient(135deg, #1672B8 0%, #606062 100%)";
+  const infoBoxBg = theme === "danger" ? "#FEF2F2" : "#E3EEF6";
+  const infoBoxBorder = theme === "danger" ? "#DC2626" : "#1672B8";
+
+  return `
 <!DOCTYPE html>
 <html>
 <head>
@@ -37,15 +52,15 @@ const baseTemplate = (content: string, title: string) => `
   <style>
     body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f6fb; }
     .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    .header { background: linear-gradient(135deg, #1672B8 0%, #606062 100%); padding: 32px 24px; text-align: center; }
+    .header { background: ${headerGradient}; padding: 32px 24px; text-align: center; }
     .header h1 { margin: 0; color: #fff; font-size: 24px; font-weight: 800; }
     .header p { margin: 8px 0 0; color: rgba(255,255,255,0.7); font-size: 14px; }
     .body { padding: 32px 24px; }
     .body h2 { color: #0F172A; font-size: 20px; margin: 0 0 16px; }
     .body p { color: #475569; font-size: 15px; line-height: 1.7; margin: 0 0 16px; }
-    .btn { display: inline-block; background: linear-gradient(135deg, #1672B8 0%, #606062 100%); color: #fff !important; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 15px; margin: 8px 0; }
+    .btn { display: inline-block; background: ${btnGradient}; color: #fff !important; text-decoration: none; padding: 14px 32px; border-radius: 10px; font-weight: 700; font-size: 15px; margin: 8px 0; }
     .btn-accent { background: linear-gradient(135deg, #F97316 0%, #EAB308 100%); }
-    .info-box { background: #E3EEF6; border-left: 4px solid #1672B8; padding: 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+    .info-box { background: ${infoBoxBg}; border-left: 4px solid ${infoBoxBorder}; padding: 16px; border-radius: 0 8px 8px 0; margin: 16px 0; }
     .info-box p { margin: 4px 0; color: #475569; font-size: 14px; }
     .info-box strong { color: #0F172A; }
     .footer { background: #0F172A; padding: 24px; text-align: center; }
@@ -74,6 +89,7 @@ const baseTemplate = (content: string, title: string) => `
 </body>
 </html>
 `;
+};
 
 // 1. Welcome / Registration Email
 export const sendWelcomeEmail = (to: string, name: string) =>
@@ -428,6 +444,27 @@ export const sendMandateAlertEmail = (
       </p>
       `,
       "AutoPay Mandate Alert"
+    ),
+  });
+
+// 13. Account Paused (admin-initiated, subject/message fully editable by
+// the admin before sending — see student.controller.ts#pauseStudent).
+export const sendAccountPausedEmail = (to: string, subject: string, message: string) =>
+  sendEmail({
+    to,
+    subject,
+    html: baseTemplate(
+      `
+      <h2 style="color: #DC2626;">⚠️ Account Access Paused</h2>
+      <div class="info-box">
+        <p style="white-space: pre-wrap; margin: 0;">${message}</p>
+      </div>
+      <p style="text-align: center;">
+        <a href="${env.SITE_URL || "https://webigeeks.com"}/contact" class="btn">Contact Support</a>
+      </p>
+      `,
+      subject,
+      "danger"
     ),
   });
 

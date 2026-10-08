@@ -4,7 +4,7 @@ export interface INotification extends Document {
   recipientId: mongoose.Types.ObjectId;
   title: string;
   message: string;
-  type: 'approval' | 'rejection' | 'payment' | 'profile_update' | 'general' | 'fee_reminder';
+  type: 'approval' | 'rejection' | 'payment' | 'profile_update' | 'general' | 'fee_reminder' | 'account_paused' | 'account_resumed';
   isRead: boolean;
   link?: string;
   createdAt: Date;
@@ -27,7 +27,16 @@ const notificationSchema = new Schema<INotification>(
     },
     type: {
       type: String,
-      enum: ['approval', 'rejection', 'payment', 'profile_update', 'general', 'fee_reminder'],
+      enum: [
+        'approval',
+        'rejection',
+        'payment',
+        'profile_update',
+        'general',
+        'fee_reminder',
+        'account_paused',
+        'account_resumed',
+      ],
       default: 'general',
     },
     isRead: {

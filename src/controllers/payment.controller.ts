@@ -102,7 +102,7 @@ export const recordPaymentAndNotify = async (params: {
  * which case every remaining installment is marked paid too, since
  * nothing is actually still owed.
  */
-const applyPaymentToInstallments = async (
+export const applyPaymentToInstallments = async (
   studentId: any,
   paymentId: any,
   amount: number,

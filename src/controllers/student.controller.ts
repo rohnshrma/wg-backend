@@ -4,8 +4,9 @@ import User from '../models/User';
 import Counter from '../models/Counter';
 import Notification from '../models/Notification';
 import Course from '../models/Course';
-import Payment from '../models/Payment';
+import Payment, { IPayment } from '../models/Payment';
 import Installment from '../models/Installment';
+import { recordPaymentAndNotify, applyPaymentToInstallments } from './payment.controller';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
@@ -485,18 +486,24 @@ export const pauseStudent = asyncHandler(
 
 /**
  * @desc    Resume a paused student's account — clears the paused flag so
- *          the warning popup stops showing. A fee_payment pause requires
- *          the admin to record how/where the payment was received before
- *          it can be lifted, so there's always an audit trail of why the
- *          account came back online.
+ *          the warning popup stops showing.
+ *
+ *          A fee_payment pause must account for the money before it can be
+ *          lifted: by default the amount received is recorded as a real
+ *          Payment (through the same helper the manual Record Payment flow
+ *          uses, so it can't drift), which updates totalPaid/pendingAmount,
+ *          settles installments, generates the receipt and emails it. Pass
+ *          recordPayment: false when the payment was already recorded that
+ *          way, or is being waived — recording it twice would double-count
+ *          the student's totalPaid.
  * @route   PATCH /api/students/:id/resume
  * @access  Admin
  */
 export const resumeStudent = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const { paymentMethod, transactionId } = req.body;
+    const { recordPayment, amount, paymentMethod, transactionId, notes } = req.body;
 
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findById(req.params.id).populate('courseId', 'title');
     if (!student) {
       throw new NotFoundError('Student not found');
     }
@@ -505,36 +512,83 @@ export const resumeStudent = asyncHandler(
       throw new BadRequestError('This student account is not paused');
     }
 
-    if (student.pauseCategory === 'fee_payment' && (!paymentMethod || !transactionId)) {
-      throw new BadRequestError(
-        'This account was paused for a pending fee payment — record the payment method and transaction/reference ID to resume it'
+    const shouldRecordPayment =
+      student.pauseCategory === 'fee_payment' && recordPayment !== false;
+
+    let payment: IPayment | undefined;
+    let settledInstallments = 0;
+
+    if (shouldRecordPayment) {
+      if (!amount || amount <= 0) {
+        throw new BadRequestError(
+          'Enter the amount received to resume this account, or mark the payment as already recorded'
+        );
+      }
+      if (!paymentMethod || !transactionId) {
+        throw new BadRequestError(
+          'Record the payment method and transaction/reference ID to resume this account'
+        );
+      }
+      if (!student.courseId) {
+        throw new BadRequestError(
+          'This student has no course assigned, so a payment cannot be recorded against them. Assign a course first, or mark the payment as already recorded.'
+        );
+      }
+      if (amount > student.pendingAmount) {
+        throw new BadRequestError(
+          `Amount exceeds the pending balance of ₹${student.pendingAmount.toLocaleString('en-IN')}`
+        );
+      }
+
+      // Same helper the manual Record Payment flow and the Razorpay webhook
+      // use — updates totalPaid/pendingAmount, generates + uploads the
+      // receipt PDF, and emails/WhatsApps the payment confirmation.
+      payment = await recordPaymentAndNotify({
+        student,
+        courseId: student.courseId,
+        amount,
+        paymentMode: student.paymentMode,
+        paymentMethod,
+        transactionId,
+        notes: notes || 'Recorded while resuming a paused account',
+        recordedBy: req.user!._id,
+      });
+
+      const settledIds = await applyPaymentToInstallments(
+        student._id,
+        payment._id,
+        amount,
+        student.pendingAmount <= 0
       );
+      settledInstallments = settledIds.length;
+
+      student.resumePaymentMethod = paymentMethod;
+      student.resumeTransactionId = transactionId;
+      student.resumeAmount = amount;
+      student.resumePaymentId = payment._id;
     }
 
     student.isPaused = false;
     student.resumedAt = new Date();
-    if (student.pauseCategory === 'fee_payment') {
-      student.resumePaymentMethod = paymentMethod;
-      student.resumeTransactionId = transactionId;
-    }
     await student.save();
 
-    const resumeMessage =
-      student.pauseCategory === 'fee_payment'
-        ? `We've received your payment (Ref: ${transactionId}) and your account access has been restored.`
-        : 'Your account is back in good standing.';
+    const resumeMessage = payment
+      ? `We've received your payment of ₹${amount.toLocaleString('en-IN')} (Ref: ${transactionId}). Your account is active again and your classes resume.`
+      : 'Your account is active again and your classes resume.';
 
     await Notification.create({
       recipientId: student.userId,
       title: 'Account Reactivated',
       message: resumeMessage,
       type: 'account_resumed',
-      link: '/dashboard',
+      link: payment ? '/dashboard/payments' : '/dashboard',
     });
 
     sendResponse(res, {
-      message: 'Student account reactivated successfully',
-      data: student,
+      message: payment
+        ? `Payment of ₹${amount.toLocaleString('en-IN')} recorded and account reactivated${settledInstallments ? ` (${settledInstallments} installment(s) marked paid)` : ''}`
+        : 'Student account reactivated successfully',
+      data: { student, payment },
     });
   }
 );

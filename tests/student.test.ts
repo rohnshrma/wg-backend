@@ -2,6 +2,8 @@ import request from 'supertest';
 import app from '../src/app';
 import User from '../src/models/User';
 import Student from '../src/models/Student';
+import Course from '../src/models/Course';
+import Payment from '../src/models/Payment';
 import { connectTestDB, clearTestDB, disconnectTestDB } from './setup/db';
 
 beforeAll(async () => {
@@ -121,9 +123,18 @@ describe('Pause / resume student account', () => {
       password: 'Password123',
       role: 'student',
     });
+    const course = await Course.create({
+      title: 'Full Stack Development',
+      shortDescription: 'Learn full stack development',
+      fullDescription: 'Learn full stack development in depth',
+      thumbnailUrl: 'https://example.com/thumb.jpg',
+      duration: '6 months',
+      fees: 50000,
+    });
     const student = await Student.create({
       userId: studentUser._id,
       ...validProfilePayload,
+      courseId: course._id,
       email: 'paused-student@example.com',
       dateOfBirth: new Date(validProfilePayload.dateOfBirth),
       joiningDate: new Date(validProfilePayload.joiningDate),
@@ -132,8 +143,16 @@ describe('Pause / resume student account', () => {
     const admin = request.agent(app);
     await admin.post('/api/auth/login').send({ email: 'admin2@example.com', password: 'Password123' });
 
-    return { admin, student, studentUser };
+    return { admin, student, studentUser, course };
   };
+
+  const pauseForFees = (admin: ReturnType<typeof request.agent>, studentId: string) =>
+    admin.patch(`/api/students/${studentId}/pause`).send({
+      category: 'fee_payment',
+      reason: 'Installment 1 of ₹11,000 — ₹5,000 still outstanding',
+      emailSubject: 'Paused',
+      emailMessage: 'Please pay to resume.',
+    });
 
   it('lets a paused student log in, and surfaces the pause reason in the response', async () => {
     const { admin, student } = await setupAdminAndStudent();
@@ -192,7 +211,7 @@ describe('Pause / resume student account', () => {
 
     const resumeRes = await admin.patch(`/api/students/${student._id}/resume`);
     expect(resumeRes.status).toBe(200);
-    expect(resumeRes.body.data.isPaused).toBe(false);
+    expect(resumeRes.body.data.student.isPaused).toBe(false);
 
     const loginAttempt = await request(app)
       .post('/api/auth/login')
@@ -204,29 +223,79 @@ describe('Pause / resume student account', () => {
     expect(resumeAgain.status).toBe(400);
   }, 20000);
 
-  it('requires payment method + transaction id to resume a fee_payment pause', async () => {
+  it('records the amount as a real payment on resume, and it reflects in totals + payment history', async () => {
     const { admin, student } = await setupAdminAndStudent();
+    await pauseForFees(admin, String(student._id));
 
-    await admin.patch(`/api/students/${student._id}/pause`).send({
-      category: 'fee_payment',
-      reason: 'Pending installment #2',
-      emailSubject: 'Paused',
-      emailMessage: 'Please pay to resume.',
-    });
-
-    const bareResume = await admin.patch(`/api/students/${student._id}/resume`);
-    expect(bareResume.status).toBe(400);
-
-    const resumeWithProof = await admin.patch(`/api/students/${student._id}/resume`).send({
+    const resumeRes = await admin.patch(`/api/students/${student._id}/resume`).send({
+      amount: 5000,
       paymentMethod: 'upi',
       transactionId: 'UPI-TXN-12345',
     });
-    expect(resumeWithProof.status).toBe(200);
-    expect(resumeWithProof.body.data.isPaused).toBe(false);
+    expect(resumeRes.status).toBe(200);
+    expect(resumeRes.body.data.student.isPaused).toBe(false);
+    expect(resumeRes.body.data.payment).toBeTruthy();
 
+    // Reflects on the student record (drives the profile + dashboard figures)
     const persisted = await Student.findById(student._id);
+    expect(persisted?.totalPaid).toBe(5000);
+    expect(persisted?.pendingAmount).toBe(45000);
+    expect(persisted?.resumeAmount).toBe(5000);
     expect(persisted?.resumePaymentMethod).toBe('upi');
     expect(persisted?.resumeTransactionId).toBe('UPI-TXN-12345');
+    expect(persisted?.resumePaymentId).toBeTruthy();
+
+    // Reflects as a real row with a receipt number (drives the payments tab)
+    const payments = await Payment.find({ studentId: student._id });
+    expect(payments).toHaveLength(1);
+    expect(payments[0].amount).toBe(5000);
+    expect(payments[0].paymentMethod).toBe('upi');
+    expect(payments[0].transactionId).toBe('UPI-TXN-12345');
+    expect(payments[0].receiptNumber).toBeTruthy();
+
+    // And is served by the endpoint the student's payments tab calls
+    const history = await admin.get(`/api/payments/student/${student._id}`);
+    expect(history.status).toBe(200);
+    expect(history.body.data).toHaveLength(1);
+    expect(history.body.data[0].amount).toBe(5000);
+  }, 30000);
+
+  it('can resume without double-counting when the payment was already recorded', async () => {
+    const { admin, student } = await setupAdminAndStudent();
+    await pauseForFees(admin, String(student._id));
+
+    const res = await admin
+      .patch(`/api/students/${student._id}/resume`)
+      .send({ recordPayment: false });
+    expect(res.status).toBe(200);
+    expect(res.body.data.student.isPaused).toBe(false);
+    expect(res.body.data.payment).toBeFalsy();
+
+    const persisted = await Student.findById(student._id);
+    expect(persisted?.totalPaid).toBe(0);
+    expect(await Payment.countDocuments({ studentId: student._id })).toBe(0);
+  }, 20000);
+
+  it('rejects a fee_payment resume with no amount, or an amount above the balance', async () => {
+    const { admin, student } = await setupAdminAndStudent();
+    await pauseForFees(admin, String(student._id));
+
+    const noAmount = await admin
+      .patch(`/api/students/${student._id}/resume`)
+      .send({ paymentMethod: 'upi', transactionId: 'X-1' });
+    expect(noAmount.status).toBe(400);
+
+    const tooMuch = await admin
+      .patch(`/api/students/${student._id}/resume`)
+      .send({ amount: 999999, paymentMethod: 'upi', transactionId: 'X-1' });
+    expect(tooMuch.status).toBe(400);
+    expect(tooMuch.body.message).toContain('exceeds');
+
+    // Nothing was recorded and the account is still paused
+    expect(await Payment.countDocuments({ studentId: student._id })).toBe(0);
+    const persisted = await Student.findById(student._id);
+    expect(persisted?.isPaused).toBe(true);
+    expect(persisted?.totalPaid).toBe(0);
   }, 20000);
 
   it('rejects a pause request missing a reason or category', async () => {

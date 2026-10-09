@@ -58,9 +58,12 @@ export interface IStudent extends Document {
   pausedBy?: mongoose.Types.ObjectId;
   resumedAt?: Date;
   // Recorded when a fee_payment pause is resumed — the admin's record of
-  // the payment that resolved it.
+  // the payment that resolved it. resumePaymentId links to the real
+  // Payment row so the receipt/history is reachable from here.
   resumePaymentMethod?: 'upi' | 'cash' | 'bank_transfer' | 'other';
   resumeTransactionId?: string;
+  resumeAmount?: number;
+  resumePaymentId?: mongoose.Types.ObjectId;
 
   createdAt: Date;
   updatedAt: Date;
@@ -216,6 +219,11 @@ const studentSchema = new Schema<IStudent>(
       enum: ['upi', 'cash', 'bank_transfer', 'other'],
     },
     resumeTransactionId: String,
+    resumeAmount: Number,
+    resumePaymentId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Payment',
+    },
   },
   {
     timestamps: true,

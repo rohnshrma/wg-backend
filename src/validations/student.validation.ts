@@ -52,6 +52,13 @@ export const pauseStudentSchema = z.object({
 });
 
 export const resumeStudentSchema = z.object({
+  // Defaults to true so a fee_payment pause can't be lifted without the
+  // payment being accounted for. Set false when the payment was already
+  // recorded through the normal Record Payment flow (or is being waived)
+  // — recording it twice would double-count the student's totalPaid.
+  recordPayment: z.boolean().optional(),
+  amount: z.coerce.number().positive('Amount must be greater than 0').optional(),
   paymentMethod: z.enum(['upi', 'cash', 'bank_transfer', 'other']).optional(),
   transactionId: z.string().trim().optional(),
+  notes: z.string().trim().optional(),
 });

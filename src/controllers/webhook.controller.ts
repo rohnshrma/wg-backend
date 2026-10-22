@@ -85,6 +85,8 @@ const handleSubscriptionCharged = async (body: WebhookPayload): Promise<void> =>
   installment.paymentId = payment._id as any;
   await installment.save();
 
+  if (student.notificationsMuted || student.status === 'cancelled') return;
+
   NotificationService.autoDebitSuccess(
     student.email,
     student.studentContactNumber,
@@ -122,6 +124,17 @@ const handlePaymentFailedOrPending = async (body: WebhookPayload): Promise<void>
 
   const student = await Student.findById(mandate.studentId);
   if (!student) return;
+
+  // Do Not Disturb / cancelled admission: still alert the admin, but don't
+  // message the student.
+  if (student.notificationsMuted || student.status === 'cancelled') {
+    NotificationService.mandateNeedsAttention(
+      student.fullName,
+      student.admissionId,
+      `Installment #${installment.installmentNumber} auto-debit failed (student not notified — Do Not Disturb is on)`
+    ).catch((error) => console.error('[webhook] mandateNeedsAttention notification failed:', error));
+    return;
+  }
 
   NotificationService.autoDebitFailed(
     student.email,

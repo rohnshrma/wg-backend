@@ -1,5 +1,7 @@
 import { env } from "../config/env";
 import transporter from "../config/email";
+import { logMessage, htmlToPreview } from "../models/MessageLog";
+import { isRecipientMuted } from "../utils/doNotDisturb";
 
 interface EmailOptions {
   to: string;
@@ -9,6 +11,20 @@ interface EmailOptions {
 }
 
 export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
+  const log = (status: "sent" | "failed" | "suppressed", error?: string) =>
+    logMessage({
+      channel: "email",
+      to: options.to,
+      subject: options.subject,
+      preview: htmlToPreview(options.html),
+      status,
+      error,
+    });
+  if (await isRecipientMuted("email", options.to)) {
+    console.log(`🔕 Email to ${options.to} suppressed (Do Not Disturb)`);
+    await log("suppressed");
+    return false;
+  }
   try {
     await transporter.sendMail({
       from: `"${env.FROM_NAME || "WebiGeeks"}" <${env.FROM_EMAIL || env.SMTP_USER}>`,
@@ -18,9 +34,11 @@ export const sendEmail = async (options: EmailOptions): Promise<boolean> => {
       replyTo: options.replyTo,
     });
     console.log(`✉️  Email sent to ${options.to}`);
+    await log("sent");
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Email send failed:", error);
+    await log("failed", String(error?.message || error).slice(0, 500));
     return false;
   }
 };
@@ -462,6 +480,27 @@ export const sendAccountPausedEmail = (to: string, subject: string, message: str
       <p style="text-align: center;">
         <a href="${env.SITE_URL || "https://webigeeks.com"}/contact" class="btn">Contact Support</a>
       </p>
+      `,
+      subject,
+      "danger"
+    ),
+  });
+
+// Admission cancellation notice — like the pause notice, the admin authors
+// the full subject/body, so it's rendered as-is (escaped) in the red theme.
+export const sendAdmissionCancelledEmail = (to: string, subject: string, message: string) =>
+  sendEmail({
+    to,
+    subject,
+    html: baseTemplate(
+      `
+      <h2 style="color: #DC2626;">Admission Cancelled</h2>
+      <div class="info-box">
+        <p style="white-space: pre-wrap; margin: 0;">${message
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")}</p>
+      </div>
       `,
       subject,
       "danger"

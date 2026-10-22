@@ -1,8 +1,23 @@
 import axios from "axios";
 import { env } from "../config/env";
 import whatsappConfig from "../config/whatsapp";
+import { logMessage } from "../models/MessageLog";
+import { isRecipientMuted } from "../utils/doNotDisturb";
 
 const sendWhatsAppRequest = async (data: any): Promise<boolean> => {
+  const log = (status: "sent" | "failed" | "suppressed", error?: string) =>
+    logMessage({
+      channel: "whatsapp",
+      to: String(data.to || ""),
+      preview: data.text?.body || "",
+      status,
+      error,
+    });
+  if (await isRecipientMuted("whatsapp", String(data.to || ""))) {
+    console.log("🔕 WhatsApp message suppressed (Do Not Disturb)");
+    await log("suppressed");
+    return false;
+  }
   try {
     await axios.post(whatsappConfig.apiUrl, data, {
       headers: {
@@ -12,9 +27,11 @@ const sendWhatsAppRequest = async (data: any): Promise<boolean> => {
       timeout: 10000,
     });
     console.log("📱 WhatsApp message sent");
+    await log("sent");
     return true;
   } catch (error: any) {
     console.error("WhatsApp send failed:", error.response?.data || error.message);
+    await log("failed", JSON.stringify(error.response?.data || error.message).slice(0, 500));
     return false;
   }
 };

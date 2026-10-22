@@ -25,6 +25,7 @@ import {
   sendAutoDebitFailedEmail,
   sendMandateAlertEmail,
   sendAccountPausedEmail,
+  sendAdmissionCancelledEmail,
 } from "./emailService";
 
 /**
@@ -218,5 +219,10 @@ export const NotificationService = {
   // fire-and-forget: the UI needs to know whether the send actually succeeded.
   async accountPaused(email: string, subject: string, message: string): Promise<boolean> {
     return sendAccountPausedEmail(email, subject, message);
+  },
+
+  // Admission cancelled — admin-authored notice, awaited like accountPaused.
+  async admissionCancelled(email: string, subject: string, message: string): Promise<boolean> {
+    return sendAdmissionCancelledEmail(email, subject, message);
   },
 };

@@ -4,7 +4,7 @@ export interface INotification extends Document {
   recipientId: mongoose.Types.ObjectId;
   title: string;
   message: string;
-  type: 'approval' | 'rejection' | 'payment' | 'profile_update' | 'general' | 'fee_reminder' | 'account_paused' | 'account_resumed';
+  type: 'approval' | 'rejection' | 'payment' | 'profile_update' | 'general' | 'fee_reminder' | 'account_paused' | 'account_resumed' | 'admission_cancelled' | 'admission_reinstated';
   isRead: boolean;
   link?: string;
   createdAt: Date;
@@ -36,6 +36,8 @@ const notificationSchema = new Schema<INotification>(
         'fee_reminder',
         'account_paused',
         'account_resumed',
+        'admission_cancelled',
+        'admission_reinstated',
       ],
       default: 'general',
     },

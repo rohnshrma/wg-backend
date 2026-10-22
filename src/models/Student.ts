@@ -10,7 +10,7 @@ export interface IAddress {
 export interface IStudent extends Document {
   userId: mongoose.Types.ObjectId;
   admissionId?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
 
   // Personal Info
   fullName: string;
@@ -65,6 +65,20 @@ export interface IStudent extends Document {
   resumeAmount?: number;
   resumePaymentId?: mongoose.Types.ObjectId;
 
+  // Do Not Disturb — silences automated outbound messages (installment and
+  // AutoPay reminders/alerts). Admin-triggered sends are unaffected.
+  notificationsMuted: boolean;
+  notificationsMutedAt?: Date;
+  notificationsMutedBy?: mongoose.Types.ObjectId;
+
+  // Admission cancellation. The record, payments, installments and message
+  // history are all kept — only the status changes — so it stays usable as
+  // evidence. statusBeforeCancellation lets the cancellation be reversed.
+  cancellationReason?: string;
+  cancelledAt?: Date;
+  cancelledBy?: mongoose.Types.ObjectId;
+  statusBeforeCancellation?: 'pending' | 'approved' | 'rejected';
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,7 +98,7 @@ const studentSchema = new Schema<IStudent>(
     },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected'],
+      enum: ['pending', 'approved', 'rejected', 'cancelled'],
       default: 'pending',
     },
 
@@ -223,6 +237,29 @@ const studentSchema = new Schema<IStudent>(
     resumePaymentId: {
       type: Schema.Types.ObjectId,
       ref: 'Payment',
+    },
+
+    // Do Not Disturb
+    notificationsMuted: {
+      type: Boolean,
+      default: false,
+    },
+    notificationsMutedAt: Date,
+    notificationsMutedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+
+    // Admission cancellation
+    cancellationReason: String,
+    cancelledAt: Date,
+    cancelledBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    statusBeforeCancellation: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
     },
   },
   {

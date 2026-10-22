@@ -6,11 +6,14 @@ import Notification from '../models/Notification';
 import Course from '../models/Course';
 import Payment, { IPayment } from '../models/Payment';
 import Installment from '../models/Installment';
+import Mandate from '../models/Mandate';
+import MessageLog from '../models/MessageLog';
 import { recordPaymentAndNotify, applyPaymentToInstallments } from './payment.controller';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
 import { notifyAdmins } from '../utils/notifyAdmins';
+import { phoneSuffixPattern } from '../utils/doNotDisturb';
 import { getPagination, calculateInstallments } from '../utils/helpers';
 import {
   BadRequestError,
@@ -336,6 +339,10 @@ export const approveStudent = asyncHandler(
     if (student.status === 'approved') {
       throw new BadRequestError('Student is already approved');
     }
+    if (student.status === 'cancelled') {
+      // Approving would mint a fresh admission ID over the cancelled one.
+      throw new BadRequestError('This admission is cancelled — reinstate it instead');
+    }
 
     // Generate admission ID atomically
     const admissionId = await (Counter as any).getNextAdmissionId();
@@ -589,6 +596,181 @@ export const resumeStudent = asyncHandler(
         ? `Payment of ₹${amount.toLocaleString('en-IN')} recorded and account reactivated${settledInstallments ? ` (${settledInstallments} installment(s) marked paid)` : ''}`
         : 'Student account reactivated successfully',
       data: { student, payment },
+    });
+  }
+);
+
+/**
+ * @desc    Turn Do Not Disturb on/off. While on, nothing is emailed or
+ *          WhatsApped to the student at all (enforced in the send layer,
+ *          see utils/doNotDisturb) until it's turned off again.
+ * @route   PATCH /api/students/:id/notifications
+ * @access  Admin
+ */
+export const setStudentNotificationsMuted = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { muted } = req.body;
+
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      throw new NotFoundError('Student not found');
+    }
+
+    student.notificationsMuted = muted;
+    student.notificationsMutedAt = muted ? new Date() : undefined;
+    student.notificationsMutedBy = muted ? req.user!._id : undefined;
+    await student.save();
+
+    sendResponse(res, {
+      message: muted
+        ? 'Do Not Disturb is on — no emails or WhatsApp messages will be sent to this student'
+        : 'Do Not Disturb is off — notifications to this student have resumed',
+      data: student,
+    });
+  }
+);
+
+/**
+ * @desc    Cancel a student's admission. Only the status changes — the
+ *          profile, documents, payments, installments and the full message
+ *          history are all kept. Classes stop; nothing is deleted. Turns on
+ *          Do Not Disturb unless an admin-authored notice is being sent.
+ * @route   PATCH /api/students/:id/cancel-admission
+ * @access  Admin
+ */
+export const cancelAdmission = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const { reason, sendEmail, emailSubject, emailMessage } = req.body;
+
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      throw new NotFoundError('Student not found');
+    }
+    if (student.status === 'cancelled') {
+      throw new BadRequestError('This admission is already cancelled');
+    }
+
+    // Send the notice (if any) before DND goes on, or the send layer would
+    // block it.
+    let emailSent: boolean | undefined;
+    if (sendEmail) {
+      emailSent = await NotificationService.admissionCancelled(
+        student.email,
+        emailSubject,
+        emailMessage
+      ).catch((error) => {
+        console.error('Failed to send admission-cancelled email:', error);
+        return false;
+      });
+    }
+
+    student.statusBeforeCancellation = student.status as 'pending' | 'approved' | 'rejected';
+    student.status = 'cancelled';
+    student.cancellationReason = reason;
+    student.cancelledAt = new Date();
+    student.cancelledBy = req.user!._id;
+    if (!student.notificationsMuted) {
+      student.notificationsMuted = true;
+      student.notificationsMutedAt = new Date();
+      student.notificationsMutedBy = req.user!._id;
+    }
+    await student.save();
+
+    await Notification.create({
+      recipientId: student.userId,
+      title: 'Admission Cancelled',
+      message: 'Your admission has been cancelled and your classes have stopped. Please contact support for details.',
+      type: 'admission_cancelled',
+      link: '/dashboard',
+    });
+
+    // A live AutoPay mandate would keep debiting a cancelled student.
+    const liveMandate = await Mandate.exists({
+      studentId: student._id,
+      status: { $in: ['created', 'authenticated', 'active', 'paused'] },
+    });
+
+    sendResponse(res, {
+      message: 'Admission cancelled. All records have been kept.',
+      data: { student, emailSent },
+      warning: liveMandate
+        ? 'This student still has an active AutoPay mandate — cancel it from their payments page so they are not charged.'
+        : undefined,
+    });
+  }
+);
+
+/**
+ * @desc    Reverse a cancellation, restoring the status it had before.
+ *          Do Not Disturb is left as-is — turn it off separately.
+ * @route   PATCH /api/students/:id/reinstate
+ * @access  Admin
+ */
+export const reinstateAdmission = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      throw new NotFoundError('Student not found');
+    }
+    if (student.status !== 'cancelled') {
+      throw new BadRequestError('This admission is not cancelled');
+    }
+
+    student.status = student.statusBeforeCancellation || 'approved';
+    student.statusBeforeCancellation = undefined;
+    await student.save();
+
+    await Notification.create({
+      recipientId: student.userId,
+      title: 'Admission Reinstated',
+      message: 'Your admission has been reinstated and your classes resume.',
+      type: 'admission_reinstated',
+      link: '/dashboard',
+    });
+
+    sendResponse(res, { message: 'Admission reinstated', data: student });
+  }
+);
+
+/**
+ * @desc    Everything sent to a student: in-app notifications, every logged
+ *          email/WhatsApp (including ones blocked by Do Not Disturb), and
+ *          installment reminder history.
+ * @route   GET /api/students/:id/communications
+ * @access  Admin
+ */
+export const getStudentCommunications = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const student = await Student.findById(req.params.id);
+    if (!student) {
+      throw new NotFoundError('Student not found');
+    }
+
+    const user = await User.findById(student.userId).select('email');
+    const emails = [...new Set([student.email, user?.email].filter(Boolean) as string[])].map(
+      (e) => e.toLowerCase()
+    );
+    // WhatsApp log rows hold the normalised 91XXXXXXXXXX form.
+    const phonePattern = phoneSuffixPattern(student.studentContactNumber);
+
+    const [notifications, messages, reminders] = await Promise.all([
+      Notification.find({ recipientId: student.userId }).sort({ createdAt: -1 }).limit(200),
+      MessageLog.find({
+        $or: [
+          { channel: 'email', to: { $in: emails } },
+          ...(phonePattern ? [{ channel: 'whatsapp', to: { $regex: phonePattern } }] : []),
+        ],
+      })
+        .sort({ createdAt: -1 })
+        .limit(500),
+      Installment.find({ studentId: student._id, reminderSent: true })
+        .select('installmentNumber amount dueDate status reminderSentAt collectionMethod')
+        .sort({ reminderSentAt: -1 }),
+    ]);
+
+    sendResponse(res, {
+      message: 'Communications fetched',
+      data: { notifications, messages, reminders },
     });
   }
 );

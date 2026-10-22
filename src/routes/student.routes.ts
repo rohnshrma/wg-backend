@@ -3,6 +3,8 @@ import { protect, authorize } from '../middleware/auth.middleware';
 import validate from '../middleware/validate.middleware';
 import {
   pauseStudentSchema,
+  setNotificationsMutedSchema,
+  cancelAdmissionSchema,
   resumeStudentSchema,
   studentProfileSchema,
 } from '../validations/student.validation';
@@ -15,6 +17,10 @@ import {
   rejectStudent,
   pauseStudent,
   resumeStudent,
+  setStudentNotificationsMuted,
+  cancelAdmission,
+  reinstateAdmission,
+  getStudentCommunications,
   deleteStudent,
   getMyDashboard,
 } from '../controllers/student.controller';
@@ -51,6 +57,22 @@ router.patch(
   validate(resumeStudentSchema),
   resumeStudent
 );
+router.patch(
+  '/:id/notifications',
+  protect,
+  authorize('admin'),
+  validate(setNotificationsMutedSchema),
+  setStudentNotificationsMuted
+);
+router.patch(
+  '/:id/cancel-admission',
+  protect,
+  authorize('admin'),
+  validate(cancelAdmissionSchema),
+  cancelAdmission
+);
+router.patch('/:id/reinstate', protect, authorize('admin'), reinstateAdmission);
+router.get('/:id/communications', protect, authorize('admin'), getStudentCommunications);
 router.delete('/:id', protect, authorize('admin'), deleteStudent);
 
 export default router;

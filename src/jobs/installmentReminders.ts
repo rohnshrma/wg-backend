@@ -33,12 +33,17 @@ export const runInstallmentReminders = async (): Promise<void> => {
       { reminderSent: false },
       { reminderSentAt: { $lt: new Date(now.getTime() - 24 * 60 * 60 * 1000) } },
     ],
-  }).populate('studentId', 'fullName email studentContactNumber');
+  }).populate('studentId', 'fullName email studentContactNumber status notificationsMuted');
 
   let sent = 0;
   for (const installment of dueSoon) {
     const student = installment.studentId as any;
     if (!student?.email) continue;
+
+    // Do Not Disturb and cancelled admissions get no reminders at all. (The
+    // send layer also blocks muted recipients; skipping here just avoids
+    // marking the reminder as sent.)
+    if (student.notificationsMuted || student.status === 'cancelled') continue;
 
     try {
       // AutoPay installments get an informational "this will be auto-debited"

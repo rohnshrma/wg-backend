@@ -62,3 +62,19 @@ export const resumeStudentSchema = z.object({
   transactionId: z.string().trim().optional(),
   notes: z.string().trim().optional(),
 });
+
+export const setNotificationsMutedSchema = z.object({
+  muted: z.boolean({ required_error: 'muted (true/false) is required' }),
+});
+
+export const cancelAdmissionSchema = z
+  .object({
+    reason: z.string().trim().min(1, 'A reason for cancelling this admission is required'),
+    sendEmail: z.boolean().optional(),
+    emailSubject: z.string().trim().optional(),
+    emailMessage: z.string().trim().optional(),
+  })
+  .refine((d) => !d.sendEmail || (d.emailSubject && d.emailMessage), {
+    message: 'Email subject and message are required when sending a notice',
+    path: ['emailMessage'],
+  });

@@ -37,11 +37,18 @@ const setAuthCookie = (res: Response, token: string): void => {
 // reappears on any later page load/refresh, not just right after login.
 const getPauseStatus = async (
   user: Pick<IUser, '_id' | 'role'>
-): Promise<{ isPaused: boolean; pauseReason?: string; pauseCategory?: string }> => {
+): Promise<{
+  isPaused: boolean;
+  pauseReason?: string;
+  pauseCategory?: string;
+  isAdmissionCancelled?: boolean;
+}> => {
   if (user.role !== 'student') return { isPaused: false };
   const student = await Student.findOne({ userId: user._id }).select(
-    'isPaused pauseReason pauseCategory'
+    'isPaused pauseReason pauseCategory status'
   );
+  // The internal cancellation reason is deliberately not exposed.
+  if (student?.status === 'cancelled') return { isPaused: false, isAdmissionCancelled: true };
   return student?.isPaused
     ? { isPaused: true, pauseReason: student.pauseReason, pauseCategory: student.pauseCategory }
     : { isPaused: false };

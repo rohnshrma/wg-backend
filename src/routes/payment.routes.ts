@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { protect, authorize } from '../middleware/auth.middleware';
 import validate from '../middleware/validate.middleware';
 import { createMandateSchema } from '../validations/mandate.validation';
+import { deletePaymentSchema } from '../validations/payment.validation';
 import {
   getAllPayments,
   exportPayments,
@@ -11,6 +12,7 @@ import {
   getInstallments,
   generateInstallmentPlan,
   markInstallmentPaid,
+  deletePayment,
 } from '../controllers/payment.controller';
 import { createMandate, getAllMandates, getStudentMandate, cancelMandate } from '../controllers/mandate.controller';
 
@@ -21,6 +23,7 @@ router.get('/', protect, authorize('admin'), getAllPayments);
 router.get('/student/:id', protect, getStudentPayments);
 router.post('/', protect, authorize('admin'), recordPayment);
 router.post('/:id/send-receipt', protect, authorize('admin'), sendPaymentReceipt);
+router.delete('/:id', protect, authorize('admin'), validate(deletePaymentSchema), deletePayment);
 router.get('/installments/student/:id', protect, getInstallments);
 router.post('/installments/student/:id/generate', protect, authorize('admin'), generateInstallmentPlan);
 router.patch('/installments/:id/pay', protect, authorize('admin'), markInstallmentPaid);

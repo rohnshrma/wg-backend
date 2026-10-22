@@ -37,4 +37,3 @@ coverage/
 # misc
 *.pem
 .claude/
-.void-backups/

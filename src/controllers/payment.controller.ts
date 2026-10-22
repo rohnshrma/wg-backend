@@ -3,6 +3,7 @@ import Payment, { IPayment } from '../models/Payment';
 import Installment from '../models/Installment';
 import Student, { IStudent } from '../models/Student';
 import Counter from '../models/Counter';
+import DeletedPayment from '../models/DeletedPayment';
 import asyncHandler from '../utils/asyncHandler';
 import { sendResponse } from '../utils/apiResponse';
 import { NotificationService } from '../services/notificationService';
@@ -238,6 +239,73 @@ export const recordPayment = asyncHandler(async (req: Request, res: Response): P
       ? `Payment recorded and ${settledInstallmentIds.length} installment(s) marked paid`
       : 'Payment recorded',
     data: { ...payment.toObject(), settledInstallmentIds },
+  });
+});
+
+/**
+ * @desc    Delete a payment recorded by mistake, and reinstate its amount
+ *          as pending. Exactly reverses recordPaymentAndNotify +
+ *          applyPaymentToInstallments: subtracts it from totalPaid
+ *          (pendingAmount recomputed by the save hook) and reopens the
+ *          installments it settled. A full copy is kept in DeletedPayment
+ *          with the reason. The student is not notified.
+ * @route   DELETE /api/payments/:id
+ * @access  Admin
+ */
+export const deletePayment = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { reason } = req.body;
+
+  const payment = await Payment.findById(req.params.id);
+  if (!payment) throw new NotFoundError('Payment not found');
+
+  if (payment.paymentMethod === 'upi_autopay') {
+    // That money really was debited via Razorpay — deleting the row would
+    // just make our books disagree with the bank. Refund it on Razorpay.
+    throw new BadRequestError(
+      'AutoPay payments were actually collected through Razorpay and cannot be deleted here — refund it from the Razorpay dashboard instead'
+    );
+  }
+
+  const student = await Student.findById(payment.studentId);
+  if (!student) throw new NotFoundError('Student not found');
+
+  const installments = await Installment.find({ paymentId: payment._id });
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  await DeletedPayment.create({
+    originalPaymentId: payment._id,
+    studentId: student._id,
+    receiptNumber: payment.receiptNumber,
+    amount: payment.amount,
+    snapshot: payment.toObject(),
+    reason,
+    deletedBy: req.user!._id,
+    reopenedInstallmentIds: installments.map((i) => i._id),
+  });
+
+  for (const installment of installments) {
+    installment.status = installment.dueDate < startOfToday ? 'overdue' : 'pending';
+    installment.paidDate = undefined;
+    installment.paymentId = undefined;
+    installment.receiptUrl = undefined;
+    await installment.save();
+  }
+
+  student.totalPaid = Math.max(0, student.totalPaid - payment.amount);
+  await student.save();
+
+  await payment.deleteOne();
+
+  sendResponse(res, {
+    message: `Payment ${payment.receiptNumber} deleted — ₹${payment.amount.toLocaleString('en-IN')} is pending again${
+      installments.length ? ` and ${installments.length} installment(s) reopened` : ''
+    }`,
+    data: {
+      totalPaid: student.totalPaid,
+      pendingAmount: student.pendingAmount,
+      reopenedInstallments: installments.length,
+    },
   });
 });
 
